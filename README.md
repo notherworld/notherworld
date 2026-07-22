@@ -37,7 +37,7 @@ cli/        ~30 proof/demo bins — `live` runs ANY world JSON with zero host co
 studio/     the web studio: author worlds, watch them run live, dive the demos
 worlds/     authored worlds — colonies, hotels, cities, duels, markets, crafting
 embed/      native-host embed proofs (C and C#)
-docs/       ENGINE.md (reference) · AUTHORING.md (first world) · EMBED.md (integration)
+docs/       ENGINE.md (reference) · AUTHORING.md (first world) · EMBED.md (integration) · LEDGER.md (memory/canon)
 ```
 
 ## Quickstart

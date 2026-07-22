@@ -213,3 +213,7 @@ path = "src/tileprobe.rs"
 [[bin]]
 name = "cosmos"
 path = "src/cosmos.rs"
+
+[[bin]]
+name = "logprobe"
+path = "src/logprobe.rs"
