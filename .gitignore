@@ -20,3 +20,7 @@ dist/
 
 # local AI-session context (personal — never commit)
 CLAUDE.local.md
+
+# private working docs (feature tally + idea ledger — never commit)
+FEATURES.local.md
+IDEAS.local.md
