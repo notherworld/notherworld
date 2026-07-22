@@ -40,6 +40,13 @@ const PLAY: Card[] = [
       'Proximity-reveal worldgen. A glider descends; districts crystallize from mist to full detail by distance. Re-roll for a different city.',
     tag: 'demo',
   },
+  {
+    href: '/bestiary.html',
+    title: 'bestiary',
+    blurb:
+      "Type a planet's address and meet its creatures. Its laws — air, gravity, heat — shaped every body plan, and the same number grows the same beasts for every visitor, forever.",
+    tag: 'demo',
+  },
 ];
 
 const LAB: Card[] = [

@@ -49,6 +49,7 @@ fn probe_worlds_build_and_run() {
         "worlds/probes/probe_space.json",
         "worlds/probes/probe_pick.json",
         "worlds/probes/probe_hunt.json",
+        "worlds/bestiary.json",
     ] {
         check(rel, 25);
     }

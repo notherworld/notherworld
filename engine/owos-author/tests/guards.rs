@@ -264,6 +264,63 @@ fn fingerprint_entities(w: &World) -> String {
 }
 
 #[test]
+fn bestiary_planet_laws_shape_the_fauna() {
+    // the bestiary claim: a planet's environment BENDS its creatures' body
+    // plans. Statistically, across many addresses: thin-air planets breed
+    // flyers, dense-air planets keep life grounded, cold planets breed fur.
+    let base = load("worlds/bestiary.json");
+    let mut thin_flyers = Vec::new();
+    let mut dense_flyers = Vec::new();
+    let mut cold_fur = Vec::new();
+    let mut hot_fur = Vec::new();
+    for seed in 1..=40u64 {
+        let json = base.replace("\"rng_seed\": 79873", &format!("\"rng_seed\": {seed}"));
+        let w = owos_author::build(&json).expect("build");
+        let cosmos = w.children(0).into_iter().find(|&c| w.kind(c) == "cosmos").unwrap();
+        let planet = w.children(cosmos).into_iter().find(|&c| w.kind(c) == "planet").unwrap();
+        let species: Vec<usize> = w.children(planet).into_iter().filter(|&c| w.kind(c) == "species").collect();
+        assert!(species.len() >= 7, "every planet has a real fauna set");
+        let flyer_frac = species.iter().filter(|&&s| w.stat(s, "flyer") > 0.5).count() as f32 / species.len() as f32;
+        let fur_mean = species.iter().map(|&s| w.stat(s, "fur")).sum::<f32>() / species.len() as f32;
+        let air = w.stat(planet, "air");
+        let heat = w.stat(planet, "heat");
+        if air < 0.4 { thin_flyers.push(flyer_frac); }
+        if air > 0.6 { dense_flyers.push(flyer_frac); }
+        if heat < 0.35 { cold_fur.push(fur_mean); }
+        if heat > 0.65 { hot_fur.push(fur_mean); }
+    }
+    let mean = |v: &[f32]| v.iter().sum::<f32>() / v.len().max(1) as f32;
+    assert!(!thin_flyers.is_empty() && !dense_flyers.is_empty(), "seed scan must cover both regimes");
+    assert!(
+        mean(&thin_flyers) > mean(&dense_flyers) + 0.25,
+        "thin air must breed flyers: thin={:.2} dense={:.2}",
+        mean(&thin_flyers),
+        mean(&dense_flyers)
+    );
+    assert!(
+        mean(&cold_fur) > mean(&hot_fur) + 0.15,
+        "cold must breed fur: cold={:.2} hot={:.2}",
+        mean(&cold_fur),
+        mean(&hot_fur)
+    );
+    // and the address is permanent: same seed, same genome, bit for bit
+    let a = owos_author::build(&base).unwrap();
+    let b = owos_author::build(&base).unwrap();
+    let genome = |w: &World| -> String {
+        let mut out = String::new();
+        let mut stack = vec![0usize];
+        while let Some(id) = stack.pop() {
+            for k in ["species", "flyer", "size", "torso", "head", "hue", "fur"] {
+                out.push_str(&format!("{:.6};", w.stat(id, k)));
+            }
+            stack.extend(w.children(id));
+        }
+        out
+    };
+    assert_eq!(genome(&a), genome(&b), "planet 79873's creatures must be permanent");
+}
+
+#[test]
 fn bad_formula_reports_where() {
     // the loader must say WHICH formula broke, not just "unexpected char"
     let json = load("worlds/emberhold.json").replace("0.55 + 0.25*rand(1)", "0.55 + : 0.25*rand(1)");

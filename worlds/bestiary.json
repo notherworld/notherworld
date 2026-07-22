@@ -1,0 +1,45 @@
+{
+  "_note": "THE BESTIARY — a planet's fauna GENOME as pure data. The address (rng_seed) is the planet; its environmental laws (air, gravity, heat, lushness) roll once at genesis, and every species' BODY PLAN is shaped by those laws through plain formulas: thin air breeds flyers, heavy gravity breeds low-slung striders, cold breeds fur, gravity caps size. Same seed = same laws = same creatures, forever — the fauna are part of the planet's history, not a random skin. Part indices (torso/head/pattern) pick renderer drawing styles; continuous stats (size/leglen/fur/hue) tune them. The cascade generator is the whole trick: cosmos → planet (laws rolled as child_stats) → species (reading parent.law), one reveal.",
+
+  "rng_seed": 79873,
+
+  "seed": [
+    { "kind": "cosmos", "name": "the address", "reveal": true }
+  ],
+
+  "generators": [
+    {
+      "on": "cosmos", "spawn": "planet", "count": "1", "cascade": true,
+      "child_stats": {
+        "air":       "0.1 + 0.9*rand(11)",
+        "gravity":   "0.2 + 0.8*rand(12)",
+        "heat":      "rand(13)",
+        "lush":      "0.15 + 0.85*rand(14)",
+        "name_gene": "rand(15)"
+      }
+    },
+    {
+      "_note": "species: `index` IS the species id (guaranteed distinct); `gene` salts every trait so two planets with similar laws still grow different-looking life. Trait = golden-ratio hash of (species, gene), bent by the parent planet's laws.",
+      "on": "planet", "spawn": "species",
+      "count": "7 + floor(6 * lush + 3*rand(21))",
+      "child_stats": {
+        "species":   "index",
+        "gene":      "rand(22)",
+        "flyer":     "lt(mod(species*0.618 + gene, 1), clamp(1.35 - 1.55*parent.air, 0, 0.9))",
+        "size":      "clamp(0.2 + 0.8*mod(species*0.317 + gene*2.3, 1) - 0.38*parent.gravity, 0.12, 1)",
+        "height":    "clamp(0.25 + 0.75*mod(species*0.911 + gene*1.1, 1) - 0.42*parent.gravity, 0.1, 1)",
+        "leglen":    "iff(flyer, 0.15, clamp(0.25 + 0.75*mod(species*0.451 + gene*3.1, 1) - 0.5*parent.gravity, 0.08, 1))",
+        "fur":       "clamp(mod(species*0.271 + gene*1.3, 1) + (0.45 - parent.heat)*0.8, 0, 1)",
+        "torso":     "floor(4.99 * mod(species*0.777 + gene*1.7, 1))",
+        "head":      "floor(4.99 * mod(species*0.531 + gene*0.9, 1))",
+        "pattern":   "floor(2.99 * mod(species*0.687 + gene*2.9, 1))",
+        "hue":       "mod(species*0.161 + gene*4.7, 1)",
+        "hue2":      "mod(hue + 0.33 + 0.2*mod(species*0.87, 1), 1)",
+        "diet":      "mod(species*0.351 + gene*1.9, 1)",
+        "temper":    "mod(species*0.731 + gene*0.6, 1)",
+        "nocturnal": "gt(mod(species*0.431 + gene*2.1, 1), 0.62)",
+        "herd":      "clamp(2 + 9*mod(species*0.211 + gene*3.7, 1) * parent.lush, 1, 12)"
+      }
+    }
+  ]
+}
