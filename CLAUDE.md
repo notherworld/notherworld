@@ -56,10 +56,23 @@ output after any `engine/owos-core` change — if they drift, you changed behavi
 - `cargo run --release --bin regime` → overthrow year **4.3**
 - `cargo run --release --bin lodaudit` → **11 PASS** lines (proves sim-LOD is real, not labels)
 - `cargo run --release --bin packprobe` → PASS (carve/partition integrity)
-- `cargo test --workspace --release` → 7 pass (pure-data guards: hotel star t73/gala t213,
-  craft t94, same-seed identity, loader errors · FFI panic contract + embed numbers).
-  CI (.github/workflows/ci.yml) runs this on Linux per push — which cross-checks
-  Windows-baselined ticks on a second platform.
+- `cargo test --workspace --release` → 16 pass. CI (.github/workflows/ci.yml) runs this
+  on Linux per push — cross-checking Windows-baselined ticks on a second platform.
+
+## Adding tests (where each kind lives)
+
+- **DSL/engine unit tests** → `engine/owos-core/tests/expr.rs` — add a case whenever a
+  formula behaves surprisingly (the test documents what the DSL promises). Includes
+  bit-exact trig assertions that catch a platform math library leaking back in.
+- **Determinism guards** → `engine/owos-author/tests/guards.rs` — canonical numbers
+  (hotel star t73/gala t213, craft t94, same-seed identity incl. the geometry stack,
+  emberhold cycle, loader-error quality). If you deliberately change engine behavior,
+  re-baseline HERE in the same commit, with the why.
+- **World rot-proofing** → `engine/owos-author/tests/worlds_build.rs` — every shipped
+  pure-data world builds + runs. **Add every new world to this list when you ship it.**
+- **FFI contract** → `engine/owos-ffi/src/lib.rs` tests — panic safety + embed numbers.
+- **In-browser proofs** → `studio/src/proofs/Proofs.tsx` — the public, explained mirror
+  of the guards; add a card when a new proof is worth showing strangers.
 
 ## Working principles (learned the hard way — they'll save you time)
 
