@@ -64,6 +64,13 @@ const LAB: Card[] = [
       'Author a world as data — rules, behaviors, events, generators — and watch it run live as you edit. Export the JSON; it runs anywhere the engine does.',
     tag: 'tool',
   },
+  {
+    href: '/proofs.html',
+    title: 'proofs',
+    blurb:
+      "The engine's determinism guards, running live in your browser — same seed, same world, to the exact tick, against numbers baselined on the native build.",
+    tag: 'tool',
+  },
 ];
 
 const REPO = 'https://github.com/notherworld/notherworld';

@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import { resolve } from 'node:path'
 
 // every page in the deploy — vite only builds index.html unless told otherwise
-const pages = ['index', 'studio', 'nother', 'terra', 'city', 'lab', 'drop', 'temple']
+const pages = ['index', 'studio', 'nother', 'terra', 'city', 'lab', 'drop', 'temple', 'proofs']
 
 // A tiny dev-only proxy for the LLM narrator. It reads OPENROUTER_API_KEY from
 // portal/.env (server-side only — never bundled into the client) and forwards
