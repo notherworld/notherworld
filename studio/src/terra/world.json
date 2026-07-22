@@ -76,6 +76,25 @@
   ],
 
   "generators": [
+    { "_note": "FAUNA — wildlife as data. One kind; a critter's STATS are its species. `species` is a small integer; every trait hashes species + the district's `gene` (golden-ratio fold), so all members of a species in a region look/act alike, species differ from each other, and the SAME species reads differently in the next region — regional variation for free. Wooded/grassy districts teem; dense stone ones are sparse. Births spawn-inherit (a calf IS its species), so demography is real and extinction is permanent (see probe_hunt).",
+      "on": "district", "spawn": "fauna",
+      "count": "floor(2 + 7*clamp(wooded_frac + grassy_frac, 0, 1) + 2*rand(41))",
+      "child_stats": {
+        "species":   "floor(5.99 * rand(50))",
+        "gene":      "parent.gene",
+        "size":      "0.3 + 0.6*mod(species*0.618 + gene, 1)",
+        "hue":       "mod(species*0.317 + gene*2.3, 1)",
+        "speed":     "0.2 + 0.8*mod(species*0.777 + gene*1.7, 1)",
+        "diet":      "mod(species*0.451 + gene*3.1, 1)",
+        "shy":       "mod(species*0.271 + gene*1.3, 1)",
+        "nocturnal": "gt(mod(species*0.531 + gene*0.9, 1), 0.62)",
+        "px":        "0.08 + 0.84*rand(51)",
+        "py":        "0.08 + 0.84*rand(52)",
+        "food":      "0.5 + 0.3*rand(53)",
+        "age":       "0.15 + 0.9*rand(54)",
+        "alive":     "1"
+      }
+    },
     { "on": "city", "spawn": "district", "count": "7",
       "partition": { "style": "voronoi", "edge": "border", "x": "cx", "y": "cy",
         "where": "field(buildable, fx, fy)", "clip": "field(buildable, fx, fy)",
@@ -101,6 +120,7 @@
         "heat":      "iff(eq(index,0), 0.7 + 0.2*rand(3), clamp(0.5 - 0.4*spread + 0.2*rand(3), 0.05, 0.9))",
         "wealth":    "clamp(0.25 + 0.55*spread + 0.15*(rand(4)-0.5), 0.1, 0.95)",
         "character": "rand(5)",
+        "gene":      "rand(40)",
         "elev":      "field(elevation, cx, cy)",
         "cloud_density": "field(cloud, cx, cy)",
         "raining":       "0"
@@ -318,6 +338,11 @@
   ],
 
   "rules": [
+    { "_note": "fauna metabolism + roaming. Herbivores (diet<=0.72) graze back food each tick; predators burn it and must hunt. Roam = a small deterministic drift scaled by the species' gait.",
+      "on": "fauna", "set": "age", "expr": "age + 0.004" },
+    { "on": "fauna", "set": "food", "expr": "clamp(food + 0.018 - 0.036*gt(diet,0.72), 0, 1)" },
+    { "on": "fauna", "set": "px", "expr": "clamp(px + (rand(31) - 0.5) * 0.04 * speed, 0.03, 0.97)" },
+    { "on": "fauna", "set": "py", "expr": "clamp(py + (rand(32) - 0.5) * 0.04 * speed, 0.03, 0.97)" },
     { "_clock_note": "★ THE CLOCK (TEMPLATE #1) — the one stat everything reads: schedules, venue hours, and the renderer's day/night grade all key off city.hour, so the sim and the render share ONE truth (per TEMPLATE_CATALOG §0). `on:city` runs EVERY tick at EVERY zoom — the city has no ancestors, so is_active() is always true (verified in world.rs) — so time flows whether you're at city view or dived into a room. RATE = 0.25 h/tick → a full day ≈ 96 ticks; raise it for faster days. Hour has no modulo in the DSL, so it wraps via the day-rollover EVENT below (the proven probe_time payday pattern: reset on the rising edge). is_night/is_work are derived here so any scope can gate on them once broadcast down.",
       "on": "city", "set": "hour", "expr": "hour + 0.25" },
     { "on": "city", "set": "is_night", "expr": "clamp(ge(hour,22) + lt(hour,6), 0, 1)" },
@@ -470,6 +495,8 @@
   ],
 
   "rollups": [
+    { "_note": "living fauna per district — blocks/venues contribute 0 (no alive stat). Gates births so herds self-cap without counting non-fauna siblings.",
+      "parent": "district", "child_stat": "alive", "parent_stat": "fauna_pop", "reduce": "sum" },
     { "_note": "COUNT the civic uses up the scale tree, building → block → district. Two hops: buildings sum into their block, blocks sum into their district. `sum` reducer. The district's *_total is the whole-district civic count that drives the saturation (feedback) above.",
       "parent": "block",    "child_stat": "is_clinic",   "parent_stat": "clinic_n",     "reduce": "sum" },
     { "parent": "block",    "child_stat": "is_school",   "parent_stat": "school_n",     "reduce": "sum" },
@@ -486,6 +513,19 @@
   "_broadcast_removed_note": "We do NOT broadcast the saturation. A broadcast fires at EVERY parent→child pair unconditionally, so it clobbers (city→district would zero the district's computed value; a second broadcast level re-clobbers). Instead the saturation flows down via single-level `parent.X` RULES (below): a block copies its district's clinic_sat, a building reads its block's — each rule is the sole writer of that stat on that kind, so no clobber. Cleaner than broadcast for a computed value that must survive. RECIPE NOTE: to push a COMPUTED scope stat downward, prefer a `set X = parent.X` rule per level over a broadcast.",
 
   "actions": [
+    { "_note": "fauna behaviors — what the codex OBSERVES. Predators stalk the smallest co-located prey (@min pick on size, rank zeroes non-fauna since their alive=0); grazing tops herbivores up; wandering is the default. last_action + these labels are the codex's raw material.",
+      "on": "fauna", "name": "hunt",
+      "score": "gt(diet,0.72) * lt(food,0.75) * chance(0.22)",
+      "effects": [
+        { "op": "affect_set", "stat": "co:alive@min:1 - target.alive*(1-target.size)", "expr": "0" },
+        { "op": "add", "stat": "food", "expr": "0.55" }
+      ]
+    },
+    { "on": "fauna", "name": "graze",
+      "score": "lt(diet,0.72) * lt(food,0.6) * chance(0.5)",
+      "effects": [{ "op": "add", "stat": "food", "expr": "0.12" }]
+    },
+    { "on": "fauna", "name": "wander", "score": "0.15", "effects": [] },
     { "on": "occupant", "name": "wander_next_room",
       "score": "restless*gt(energy,0.35)*0.7",
       "effects": [ { "op": "move", "stat": "door" } ]
@@ -560,6 +600,22 @@
   ],
 
   "events": [
+    { "_note": "fauna demography — the probe_hunt pattern, slower rates for a persistent world. Births spawn-inherit: a calf carries its parent's species/traits with age reset, so lineages are real and extinction is permanent.",
+      "on": "fauna", "when": "gt(food,0.85)*gt(age,0.3)*lt(age,1.8)*lt(parent.fauna_pop,15)*chance(0.1)",
+      "label": "a calf is born",
+      "do": [
+        { "op": "add", "stat": "food", "expr": "-0.45" },
+        { "op": "spawn", "stat": "fauna", "expr": "calf of" }
+      ]
+    },
+    { "on": "fauna", "when": "lt(alive,0.5)", "label": "taken by a predator",
+      "do": [{ "op": "despawn" }] },
+    { "on": "fauna", "when": "gt(caught,0.5)", "label": "caught for the codex",
+      "do": [{ "op": "despawn" }] },
+    { "on": "fauna", "when": "lt(food,0.02)", "label": "starved",
+      "do": [{ "op": "despawn" }] },
+    { "on": "fauna", "when": "gt(age,2.8)", "label": "died of old age",
+      "do": [{ "op": "despawn" }] },
     { "_dayroll_note": "★ DAY ROLLOVER (clock template) — resets the hour accumulator and counts the day. Rising-edge on ge(hour,24): fires once at midnight, the `do` subtracts 24 (which re-arms the edge for tomorrow) and increments day. Modulo-free periodic pattern (probe_time payday). Runs on the always-active city, so days accrue at every zoom.",
       "on": "city", "when": "ge(hour,24)", "label": "🌅 a new day breaks over Veranholm",
       "do": [ { "op": "set", "stat": "hour", "expr": "hour - 24" }, { "op": "add", "stat": "day", "expr": "1" } ] },

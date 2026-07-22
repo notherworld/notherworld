@@ -56,7 +56,7 @@ output after any `engine/owos-core` change — if they drift, you changed behavi
 - `cargo run --release --bin regime` → overthrow year **4.3**
 - `cargo run --release --bin lodaudit` → **11 PASS** lines (proves sim-LOD is real, not labels)
 - `cargo run --release --bin packprobe` → PASS (carve/partition integrity)
-- `cargo test --workspace --release` → 18 pass. CI (.github/workflows/ci.yml) runs this
+- `cargo test --workspace --release` → 19 pass. CI (.github/workflows/ci.yml) runs this
   on Linux per push — cross-checking Windows-baselined ticks on a second platform.
 
 ## Adding tests (where each kind lives)

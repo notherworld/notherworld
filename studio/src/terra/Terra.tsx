@@ -174,6 +174,23 @@ export default function Terra() {
   // compositor LERPs between them by time-since-heartbeat, so pawns GLIDE instead of
   // teleporting 200px per tick. Refs (not state) so this never restarts the rAF loop.
   const peopleRef = useRef<{ wx0: number; wy0: number; wx1: number; wy1: number; at: number; id: number }[]>([]);
+  // LIVE FAUNA — wildlife roaming the districts (district-local px/py → world),
+  // same glide law as people. Each carries its species stats for the stamp + codex.
+  const faunaRef = useRef<{
+    wx0: number; wy0: number; wx1: number; wy1: number; id: number;
+    species: number; gene: number; size: number; hue: number; diet: number;
+    nocturnal: number; act: string | null; live: boolean;
+  }[]>([]);
+  const faunaPrevRef = useRef<Map<number, { wx: number; wy: number }>>(new Map());
+  // THE CODEX — what the naturalist has personally observed, keyed per species+region
+  // gene. Entries grow by WATCHING (behaviors seen) and by CATCHING (completes the
+  // entry). Ref + version counter so the HUD only re-renders when knowledge changes.
+  const codexRef = useRef<Map<string, {
+    species: number; gene: number; size: number; hue: number; diet: number; nocturnal: number;
+    seen: number; caught: number; acts: Set<string>; extinct: boolean;
+  }>>(new Map());
+  const [codexV, setCodexV] = useState(0);
+  const [codexOpen, setCodexOpen] = useState(false);
   const peoplePrevRef = useRef<Map<number, { wx: number; wy: number }>>(new Map());
   const peopleT0Ref = useRef<number>(0);   // performance.now() of the last heartbeat
   const gradeElRef = useRef<HTMLDivElement>(null);   // the day/night tint layer (set directly, no re-render)
@@ -215,6 +232,66 @@ export default function Terra() {
       for (const id of [...prev.keys()]) if (!seen.has(id)) prev.delete(id);   // forget folded-away people
       peopleRef.current = ppl;
       peopleT0Ref.current = performance.now();
+      // FAUNA: district-local px/py → world via the district's patch. Same
+      // prev-position glide as people. The codex learns from every beat: a
+      // species you can SEE is a species you're observing (behaviors accumulate),
+      // and a watched region whose species count hits zero is a witnessed extinction.
+      const dd = new Map<number, [number, number, number, number]>();
+      const watchedGenes = new Set<string>();   // regions we can honestly JUDGE (on screen + revealed)
+      for (const e of s.entities) {
+        if (e.kind === 'district' && e.stats.wx1 > e.stats.wx0) {
+          dd.set(e.id, [e.stats.wx0, e.stats.wy0, e.stats.wx1, e.stats.wy1]);
+          if (e.revealed && e.stats.gene !== undefined) watchedGenes.add(e.stats.gene.toFixed(3));
+        }
+      }
+      const fprev = faunaPrevRef.current;
+      const fauna: typeof faunaRef.current = [];
+      const fseen = new Set<number>();
+      const liveBySpecies = new Map<string, number>();
+      for (const e of s.entities) {
+        if (e.kind !== 'fauna' || e.parent == null || (e.stats.alive ?? 0) < 0.5) continue;
+        const d = dd.get(e.parent);
+        if (!d) continue;
+        const wx = d[0] + (e.stats.px ?? 0.5) * (d[2] - d[0]);
+        const wy = d[1] + (e.stats.py ?? 0.5) * (d[3] - d[1]);
+        const p0 = fprev.get(e.id) ?? { wx, wy };
+        fauna.push({
+          wx0: p0.wx, wy0: p0.wy, wx1: wx, wy1: wy, id: e.id,
+          species: Math.round(e.stats.species ?? 0), gene: e.stats.gene ?? 0,
+          size: e.stats.size ?? 0.5, hue: e.stats.hue ?? 0, diet: e.stats.diet ?? 0,
+          nocturnal: e.stats.nocturnal ?? 0, act: e.last_action,
+          live: e.active,   // parked (coarse-band) wildlife is an idea, not a target
+        });
+        fprev.set(e.id, { wx, wy });
+        fseen.add(e.id);
+        const key = `${Math.round(e.stats.species ?? 0)}:${(e.stats.gene ?? 0).toFixed(3)}`;
+        liveBySpecies.set(key, (liveBySpecies.get(key) ?? 0) + 1);
+      }
+      for (const id of [...fprev.keys()]) if (!fseen.has(id)) fprev.delete(id);
+      faunaRef.current = fauna;
+      // codex bookkeeping: first sightings, observed behaviors, witnessed extinctions
+      let changed = false;
+      const cx = codexRef.current;
+      for (const f of fauna) {
+        const key = `${f.species}:${f.gene.toFixed(3)}`;
+        let e = cx.get(key);
+        if (!e) {
+          e = { species: f.species, gene: f.gene, size: f.size, hue: f.hue, diet: f.diet, nocturnal: f.nocturnal, seen: 0, caught: 0, acts: new Set(), extinct: false };
+          cx.set(key, e);
+          changed = true;
+        }
+        e.seen++;
+        if (e.extinct) { e.extinct = false; changed = true; }   // it lives (recovered / misjudged)
+        if (f.act && !e.acts.has(f.act)) { e.acts.add(f.act); changed = true; }
+      }
+      for (const [key, e] of cx) {
+        // a species is only DECLARED extinct while its home region is on screen
+        // and revealed — absence because you walked away is not evidence.
+        if (!e.extinct && !liveBySpecies.has(key) && e.seen > 12 && watchedGenes.has(e.gene.toFixed(3))) {
+          e.extinct = true; changed = true;
+        }
+      }
+      if (changed) setCodexV((v) => v + 1);
       // day/night grade — read the sim's clock and tint the whole view (set the layer's
       // colour directly; CSS eases it, so no per-beat React re-render).
       const cityE = s.entities.find((e) => e.kind === 'city');
@@ -558,13 +635,35 @@ export default function Terra() {
   // containing the point, across every visible block).
   const onWorldClick = (e: React.MouseEvent) => {
     if (suppressClickRef.current || zoomRectRef.current) return;
-    if (!focusE || (focusE.kind !== 'block' && focusE.kind !== 'building')) return;
     const w = worldRef.current; if (!w) return;
     // screen → buffer window px → world coord
     const srcW = Math.round(fitBox.w), srcH = Math.round(fitBox.h);
     const bx = (GRID - srcW) / 2 + viewPxRef.current.x + e.clientX * (srcW / window.innerWidth);
     const by = (GRID - srcH) / 2 + viewPxRef.current.y + e.clientY * (srcH / window.innerHeight);
     const wpt = scopeMap.toW(bx, by);
+    // ── CATCH — a click near a critter documents it. The engine does the real
+    // work: caught=1 → the "caught for the codex" event despawns it and writes
+    // the moment into the world's log. Permanent, like everything here.
+    if (focusE && focusE.kind !== 'city') {
+      let best: { id: number; d2: number } | null = null;
+      for (const c of faunaRef.current) {
+        if (!c.live) continue;                 // can't catch wildlife that isn't really THERE yet
+        const sc = scopeMap.toS(c.wx1, c.wy1);
+        const dx = sc.x - bx, dy = sc.y - by;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < 12 * 12 && (!best || d2 < best.d2)) best = { id: c.id, d2 };
+      }
+      if (best) {
+        const c = faunaRef.current.find((f) => f.id === best!.id)!;
+        w.set(best.id, 'caught', 1);
+        const key = `${c.species}:${c.gene.toFixed(3)}`;
+        const entry = codexRef.current.get(key);
+        if (entry) { entry.caught++; setCodexV((v) => v + 1); setCodexOpen(true); }
+        faunaRef.current = faunaRef.current.filter((f) => f.id !== best!.id);  // gone this frame
+        return;
+      }
+    }
+    if (!focusE || (focusE.kind !== 'block' && focusE.kind !== 'building')) return;
     // A building's real shape is its CARVED region, not a stats bbox (bbox was the
     // whole block → every building "contained" the click → wrong pick + offset).
     // Ask the engine which carved lot owns the point, in each visible block's LOCAL
@@ -3256,6 +3355,52 @@ export default function Terra() {
         }
       }
 
+      // ---- FAUNA — wildlife stamped from district zoom down. A critter is a
+      // pixel body in its species' colour (hue+size are species genes), a darker
+      // head toward travel, and a foot shadow. Predators get a warmer, redder
+      // cast. Glides on the same 700ms hop as people.
+      const crit = faunaRef.current;
+      if (crit.length && RSC > 1.15) {
+        const fGl = Math.min(1, (t - peopleT0Ref.current) / 700);
+        for (const cA of crit) {
+          const sc = scopeMap.toS(cA.wx0 + (cA.wx1 - cA.wx0) * fGl, cA.wy0 + (cA.wy1 - cA.wy0) * fGl);
+          const fx = Math.round(sc.x), fy = Math.round(sc.y);
+          const BW = Math.max(2, Math.round((1.2 + cA.size * 2.6) * Math.min(RSC, 6) * 0.55));
+          const BH = Math.max(2, Math.round(BW * 0.62));
+          if (fx < 2 || fy < BH + 1 || fx >= GRID - 2 || fy >= GRID - 1) continue;
+          if (isWater[fy * GRID + fx]) continue;
+          // species colour from its hue gene (predators pull toward rust)
+          const h6 = cA.hue * 6;
+          const base: RGB = [
+            Math.round(120 + 100 * Math.abs(Math.sin(h6))),
+            Math.round(95 + 90 * Math.abs(Math.sin(h6 + 2.1))),
+            Math.round(80 + 95 * Math.abs(Math.sin(h6 + 4.2))),
+          ];
+          let body: RGB = cA.diet > 0.72 ? mixToward(base, [188, 92, 70], 0.4) : base;
+          if (!cA.live) body = mixToward(body, [40, 44, 60], 0.5);   // parked wildlife: a dimmed idea
+          const belly = mixToward(body, [235, 228, 205], 0.35);
+          const dirR = cA.wx1 >= cA.wx0;                       // facing from travel
+          const x0 = fx - (BW >> 1), y0 = fy - BH;
+          for (let ox = 0; ox < BW; ox++) {                    // foot shadow
+            const gx = x0 + ox; if (gx < 0 || gx >= GRID) continue;
+            const k4 = (fy * GRID + gx) * 4;
+            data[k4] *= 0.78; data[k4 + 1] *= 0.78; data[k4 + 2] *= 0.78;
+          }
+          for (let oy = 0; oy < BH; oy++) {
+            const gy = y0 + oy; if (gy < 0 || gy >= GRID) continue;
+            const rounded = (oy === 0 && BW >= 4) ? 1 : 0;
+            for (let ox = rounded; ox < BW - rounded; ox++) {
+              const gx = x0 + ox; if (gx < 0 || gx >= GRID) continue;
+              const isHead = dirR ? ox >= BW - Math.max(1, BW >> 2) : ox < Math.max(1, BW >> 2);
+              const isBelly = oy >= BH - 1 && !isHead;
+              const c: RGB = isHead ? mixToward(body, [30, 26, 34], 0.35) : isBelly ? belly : body;
+              const k4 = (gy * GRID + gx) * 4;
+              data[k4] = c[0]; data[k4 + 1] = c[1]; data[k4 + 2] = c[2]; data[k4 + 3] = 255;
+            }
+          }
+        }
+      }
+
       bctx.putImageData(img, 0, 0);   // compose the frame into the overscan bake…
       blit();                          // …and show the camera's window of it
     };
@@ -3364,9 +3509,12 @@ export default function Terra() {
           <button onClick={() => setFloorLv((v) => Math.max(0, v - 1))}>▼</button>
         </div>
       )}
-      {!hudHidden && (
+      {!hudHidden && (<>
         <button className="atlas-reseed" onClick={reseed} title="generate a different world">⟳ new world</button>
-      )}
+        <button className="atlas-reseed" style={{ right: 130 }} onClick={() => setCodexOpen((v) => !v)}
+          title="what you've documented">✦ codex{codexRef.current.size ? ` ${codexRef.current.size}` : ''}</button>
+        {codexOpen && <CodexPanel entries={[...codexRef.current.values()]} v={codexV} onClose={() => setCodexOpen(false)} />}
+      </>)}
       {/* HUD toggle — always visible so you can get a clean map view and bring it back */}
       <button className="atlas-hudtoggle" onClick={() => setHudHidden((v) => !v)}
         title={hudHidden ? 'show interface' : 'hide interface'}>
@@ -3396,6 +3544,76 @@ function legendItems(): [RGB, string, boolean][] {
     [ROCK, 'rock / mountain', false], [SNOW, 'snow', false], [BEACH, 'coast', false],
   ];
 }
+// ── THE CODEX — the naturalist's field journal. Everything in it was OBSERVED:
+// behaviors come from actions the sim actually chose (last_action), diet and
+// activity unlock by CATCHING one, and an extinction line only appears if the
+// species vanished while you were watching its home region. Names are
+// deterministic from species+gene — the same creature has the same name for
+// every visitor, forever.
+const SYL_A = ['mor', 'vel', 'tan', 'kir', 'sol', 'bram', 'fen', 'lux', 'dro', 'nim'];
+const SYL_B = ['ath', 'ille', 'ock', 'ern', 'yph', 'and', 'ilk', 'oss', 'ume', 'ari'];
+function speciesName(species: number, gene: number): string {
+  const h = Math.abs(Math.floor(species * 7919 + gene * 104729));
+  const a = SYL_A[h % SYL_A.length], b = SYL_B[Math.floor(h / 10) % SYL_B.length];
+  const c = SYL_A[Math.floor(h / 100) % SYL_A.length];
+  const n = a + b + (h % 3 === 0 ? c : '');
+  return n[0].toUpperCase() + n.slice(1);
+}
+const ACT_NOTES: Record<string, string> = {
+  wander: 'roams its range',
+  graze: 'grazes the open ground',
+  hunt: 'stalks smaller creatures',
+};
+function CodexPanel({ entries, v, onClose }: {
+  entries: { species: number; gene: number; size: number; hue: number; diet: number; nocturnal: number; seen: number; caught: number; acts: Set<string>; extinct: boolean }[];
+  v: number; onClose: () => void;
+}) {
+  void v; // version counter forces re-render as knowledge grows
+  const sorted = [...entries].sort((a, b) => b.seen - a.seen);
+  return (
+    <div style={{
+      position: 'fixed', right: 12, top: 54, width: 264, maxHeight: '72vh', overflowY: 'auto',
+      background: 'rgba(10,12,22,0.92)', border: '1px solid rgba(255,255,255,0.14)',
+      borderRadius: 10, padding: '10px 12px', zIndex: 40, backdropFilter: 'blur(4px)',
+      font: '12.5px/1.45 ui-monospace, monospace', color: '#cdd3e0',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+        <strong style={{ fontSize: 13 }}>✦ field codex</strong>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8891a8', cursor: 'pointer', font: 'inherit' }}>✕</button>
+      </div>
+      {sorted.length === 0 && <div style={{ opacity: 0.6 }}>Nothing documented yet — find wildlife and click a creature to catch it.</div>}
+      {sorted.map((e) => {
+        const h6 = e.hue * 6;
+        const col = `rgb(${Math.round(120 + 100 * Math.abs(Math.sin(h6)))},${Math.round(95 + 90 * Math.abs(Math.sin(h6 + 2.1)))},${Math.round(80 + 95 * Math.abs(Math.sin(h6 + 4.2)))})`;
+        const documented = e.caught > 0;
+        return (
+          <div key={`${e.species}:${e.gene}`} style={{ borderTop: '1px solid rgba(255,255,255,0.08)', padding: '7px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{
+                width: Math.round(8 + e.size * 8), height: Math.round(6 + e.size * 5),
+                background: col, borderRadius: 3, display: 'inline-block', flexShrink: 0,
+                outline: e.extinct ? '1px solid rgba(255,120,120,0.7)' : undefined,
+              }} />
+              <strong>{speciesName(e.species, e.gene)}</strong>
+              {e.extinct && <span style={{ color: '#ff9a9a', fontSize: 11 }}>extinct</span>}
+              {!documented && <span style={{ opacity: 0.5, fontSize: 11 }}>undocumented</span>}
+            </div>
+            <div style={{ opacity: 0.8, marginTop: 3 }}>
+              {[...e.acts].map((a) => ACT_NOTES[a] ?? a).join(' · ') || 'behavior unknown'}
+            </div>
+            {documented && (
+              <div style={{ opacity: 0.8 }}>
+                {e.diet > 0.72 ? 'carnivore' : 'herbivore'} · {e.nocturnal > 0.5 ? 'nocturnal' : 'diurnal'} · caught ×{e.caught}
+              </div>
+            )}
+            {e.extinct && <div style={{ color: '#ff9a9a', opacity: 0.9 }}>gone from its home range — witnessed.</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Hud({ trail, focus, seed, onCrumb, scope, raining }: {
   trail: EntityDto[]; focus: number; seed: number; onCrumb: (id: number) => void;
   scope: EntityDto | undefined; raining: boolean;

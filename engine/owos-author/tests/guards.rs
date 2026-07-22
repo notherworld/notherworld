@@ -154,6 +154,66 @@ fn unhunted_species_thrives() {
 }
 
 #[test]
+fn terra_fauna_ecosystem_lives() {
+    // the fauna layer: species-as-stats wildlife in terra's districts. Fauna
+    // generate on DISTRICT REVEAL (lazy, like everything) — so this test does
+    // what a host does: reveal a wild district, then watch it live.
+    let json = load("studio/src/terra/world.json");
+    let mut w = owos_author::build(&json).expect("terra must build");
+    let city = w
+        .children(0)
+        .into_iter()
+        .find(|&c| w.kind(c) == "city")
+        .expect("city exists");
+    // reveal every district — the whole island becomes a nature reserve
+    for d in w.children(city) {
+        if w.kind(d) == "district" {
+            w.reveal(d);
+        }
+    }
+    let census = |w: &World| -> Vec<usize> {
+        w.children(city)
+            .iter()
+            .filter(|&&d| w.kind(d) == "district")
+            .map(|&d| {
+                w.children(d)
+                    .iter()
+                    .filter(|&&c| w.kind(c) == "fauna" && w.stat(c, "alive") > 0.5)
+                    .count()
+            })
+            .collect()
+    };
+    let start: usize = census(&w).iter().sum();
+    assert!(start >= 10, "the island should teem after reveal, got {start}");
+
+    // species share traits; different species differ (the gene-hash contract)
+    let d0 = w.children(city).into_iter().find(|&d| w.kind(d) == "district").unwrap();
+    let fauna: Vec<usize> = w.children(d0).into_iter().filter(|&c| w.kind(c) == "fauna").collect();
+    let mut by_species: std::collections::BTreeMap<i64, Vec<f32>> = Default::default();
+    for &f in &fauna {
+        by_species.entry(w.stat(f, "species") as i64).or_default().push(w.stat(f, "size"));
+    }
+    for (sp, sizes) in &by_species {
+        for s in sizes {
+            assert_eq!(*s, sizes[0], "species {sp} members must share size");
+        }
+    }
+
+    // run a season: the ecosystem persists (no collapse, no runaway)
+    for _ in 0..400 {
+        w.step();
+    }
+    let end: usize = census(&w).iter().sum();
+    assert!(end >= 5, "the unhunted island must stay alive, got {end}");
+    assert!(end <= 15 * 8, "population must stay capped, got {end}");
+    // births happened (lineages are real, not a static tableau)
+    assert!(
+        w.log.iter().any(|e| e.message.contains("calf is born")),
+        "a living season should see births"
+    );
+}
+
+#[test]
 fn bad_formula_reports_where() {
     // the loader must say WHICH formula broke, not just "unexpected char"
     let json = load("worlds/emberhold.json").replace("0.55 + 0.25*rand(1)", "0.55 + : 0.25*rand(1)");
