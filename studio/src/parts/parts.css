@@ -20,3 +20,11 @@
 .pt-sub { font-size: 10px; opacity: 0.45; }
 .pt-pair { display: flex; align-items: flex-end; gap: 6px; }
 .pt-card canvas.pt-mini { width: 32px; height: 32px; }
+.pt-views { display: flex; align-items: center; gap: 6px; margin: 4px 0 10px; }
+.pt-views button {
+  font: inherit; font-size: 12.5px; padding: 4px 12px; border-radius: 7px;
+  border: 1px solid rgba(255,255,255,0.16); background: transparent; color: inherit; cursor: pointer;
+}
+.pt-views button.pt-view-on { border-color: rgba(122,162,255,0.7); background: rgba(122,162,255,0.14); }
+.pt-views-note { font-size: 11px; opacity: 0.45; margin-left: 6px; }
+.pt-card canvas.pt-mini-solo { width: 64px; height: 64px; }

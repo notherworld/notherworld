@@ -3,13 +3,23 @@
 // sweeps and a random-composite row. When you add a part to
 // design/creature.ts, it appears here immediately — this page is how you judge
 // whether a new part reads at 40×40 before it ships to a million planets.
-import { useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { drawCreature, drawSilhouette, TORSOS, HEADS, PATTERNS, type Stats } from '../design/creature';
 import './parts.css';
 
-/** the ZOOM-CONSISTENCY check: portrait (close) and silhouette (block view)
- *  drawn from the SAME stats — the creature must read as itself in both. */
-function PairCard({ label, stats }: { label: string; stats: Stats }) {
+// which zoom tier(s) EVERY card renders — your call, page-wide. 'both' is the
+// zoom-consistency check: portrait and block silhouette from the same stats,
+// side by side, on every single card.
+type View = 'portrait' | 'block' | 'both';
+const ViewCtx = createContext<View>('portrait');
+
+const BASE: Stats = {
+  species: 3, gene: 0.42, flyer: 0, size: 0.55, height: 0.5, leglen: 0.5,
+  fur: 0.2, torso: 0, head: 0, pattern: 0, hue: 0.58, hue2: 0.12, temper: 0.4,
+};
+
+function Card({ label, stats, sub }: { label: string; stats: Stats; sub?: string }) {
+  const view = useContext(ViewCtx);
   const big = useRef<HTMLCanvasElement>(null);
   const small = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -23,30 +33,15 @@ function PairCard({ label, stats }: { label: string; stats: Stats }) {
         ctx.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
       }, 8, 14, stats, 1.2);
     }
-  }, [stats]);
+  }, [stats, view]);
   return (
     <div className="pt-card">
       <div className="pt-pair">
-        <canvas ref={big} width={40} height={40} />
-        <canvas ref={small} width={16} height={16} className="pt-mini" />
+        {view !== 'block' && <canvas ref={big} width={40} height={40} />}
+        {view !== 'portrait' && (
+          <canvas ref={small} width={16} height={16} className={view === 'block' ? 'pt-mini-solo' : 'pt-mini'} />
+        )}
       </div>
-      <strong>{label}</strong>
-      <span className="pt-sub">portrait · block view</span>
-    </div>
-  );
-}
-
-const BASE: Stats = {
-  species: 3, gene: 0.42, flyer: 0, size: 0.55, height: 0.5, leglen: 0.5,
-  fur: 0.2, torso: 0, head: 0, pattern: 0, hue: 0.58, hue2: 0.12, temper: 0.4,
-};
-
-function Card({ label, stats, sub }: { label: string; stats: Stats; sub?: string }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => { if (ref.current) drawCreature(ref.current, stats); }, [stats]);
-  return (
-    <div className="pt-card">
-      <canvas ref={ref} width={40} height={40} />
       <strong>{label}</strong>
       {sub && <span className="pt-sub">{sub}</span>}
     </div>
@@ -54,6 +49,7 @@ function Card({ label, stats, sub }: { label: string; stats: Stats; sub?: string
 }
 
 export default function Parts() {
+  const [view, setView] = useState<View>('portrait');
   const sizes = [0.15, 0.35, 0.55, 0.8, 1.0];
   const rando = (i: number): Stats => ({
     ...BASE,
@@ -65,6 +61,7 @@ export default function Parts() {
   });
 
   return (
+    <ViewCtx.Provider value={view}>
     <div className="pt">
       <p className="pt-crumb"><a href="/">← notherworld</a> · <a href="/bestiary.html">bestiary</a></p>
       <h1>creature parts</h1>
@@ -74,6 +71,14 @@ export default function Parts() {
         40×40 before it ships to a million planets. Genome permanent, portrayal versioned:
         append parts, never reorder.
       </p>
+      <div className="pt-views">
+        {(['portrait', 'block', 'both'] as const).map((v) => (
+          <button key={v} className={view === v ? 'pt-view-on' : ''} onClick={() => setView(v)}>
+            {v === 'portrait' ? '⬛ portrait' : v === 'block' ? '▪ block view' : '⬛▪ both'}
+          </button>
+        ))}
+        <span className="pt-views-note">every card obeys — 'both' is the same-soul check</span>
+      </div>
 
       <h2>torsos <span className="pt-count">{TORSOS.length}</span></h2>
       <div className="pt-grid">
@@ -113,10 +118,7 @@ export default function Parts() {
         {Array.from({ length: 12 }, (_, i) => <Card key={i} label={`№ ${i + 1}`} stats={rando(i + 1)} />)}
       </div>
 
-      <h2>zoom consistency <span className="pt-count">same stats, both tiers — same soul</span></h2>
-      <div className="pt-grid">
-        {Array.from({ length: 6 }, (_, i) => <PairCard key={i} label={`№ ${i + 1}`} stats={rando(i + 1)} />)}
-      </div>
     </div>
+    </ViewCtx.Provider>
   );
 }
