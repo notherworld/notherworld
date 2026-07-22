@@ -1,0 +1,51 @@
+{
+  "_note": "After Hours — a small cast lived at high LOD after work. tod (time-of-day) is a host sensor: 0=morning, 1=workday, 2=evening, 3=night. Activities are gated by tod, but 'gated' means WEIGHTED, not forbidden — see make_breakfast's 5% night term. Apartments+floorplans generate on first entry and persist. Dreams (host-computed at night) feed next-day mood. missed_days ripples to coworkers via the 'coworker' edge.",
+
+  "rules": [
+    { "on": "person", "set": "hunger",       "expr": "clamp(hunger + 0.045, 0, 1)" },
+    { "on": "person", "set": "stress",        "expr": "clamp(stress - 0.015, 0, 1)" },
+    { "on": "person", "set": "mood",          "expr": "clamp(mood + 0.2*((0.5 + 0.4*(dream-0.5) - 0.5*stress) - mood), 0, 1)" },
+    { "on": "person", "set": "dream",         "expr": "dream + 0.3*(0.5 - dream)" },
+    { "on": "person", "set": "team_absence",  "expr": "edge_sum(coworker, missed_days)" }
+  ],
+
+  "actions": [
+    { "on": "person", "name": "do_work", "score": "eq(tod,1)*gt(energy,0.28)*1.5",
+      "effects": [ {"op":"add","stat":"money","expr":"wage"}, {"op":"add","stat":"energy","expr":"-0.25"}, {"op":"add","stat":"stress","expr":"0.08"}, {"op":"add","stat":"hunger","expr":"0.15"} ] },
+    { "on": "person", "name": "oversleep_miss_work", "score": "eq(tod,1)*le(energy,0.28)*2.0",
+      "effects": [ {"op":"add","stat":"stress","expr":"0.15"}, {"op":"add","stat":"missed_days","expr":"1"}, {"op":"add","stat":"energy","expr":"0.45"} ] },
+
+    { "on": "person", "name": "cook_dinner", "score": "eq(tod,2)*hunger*1.3",
+      "effects": [ {"op":"add","stat":"hunger","expr":"-0.7"}, {"op":"add","stat":"energy","expr":"-0.05"}, {"op":"add","stat":"stress","expr":"-0.03"} ] },
+    { "on": "person", "name": "unwind_tv", "score": "eq(tod,2)*(0.35 + 0.5*stress)",
+      "effects": [ {"op":"add","stat":"stress","expr":"-0.12"}, {"op":"add","stat":"energy","expr":"-0.05"} ] },
+    { "on": "person", "name": "exercise", "score": "eq(tod,2)*energy*(1-night_owl)*0.8",
+      "effects": [ {"op":"add","stat":"stress","expr":"-0.18"}, {"op":"add","stat":"energy","expr":"-0.12"}, {"op":"add","stat":"hunger","expr":"0.1"} ] },
+
+    { "on": "person", "name": "go_to_sleep", "score": "eq(tod,3)*(1-night_owl)*1.2",
+      "effects": [ {"op":"add","stat":"energy","expr":"0.55"}, {"op":"set","stat":"did_sleep","expr":"1"} ] },
+    { "on": "person", "name": "doomscroll", "score": "eq(tod,3)*night_owl*(0.4 + 0.6*stress)",
+      "effects": [ {"op":"add","stat":"stress","expr":"0.07"}, {"op":"add","stat":"energy","expr":"0.20"}, {"op":"set","stat":"did_sleep","expr":"0.4"} ] },
+    { "on": "person", "name": "late_snack", "score": "eq(tod,3)*hunger*0.5",
+      "effects": [ {"op":"add","stat":"hunger","expr":"-0.4"}, {"op":"set","stat":"did_sleep","expr":"0"} ] },
+
+    { "on": "person", "name": "make_breakfast", "score": "eq(tod,0)*hunger*1.0 + eq(tod,3)*chance(0.05)*1.6",
+      "effects": [ {"op":"add","stat":"hunger","expr":"-0.5"}, {"op":"add","stat":"energy","expr":"0.05"} ] }
+  ],
+
+  "events": [
+    { "on": "person", "when": "gt(team_absence, 1.5)", "label": "noticed a coworker keeps missing work", "do": [ {"op":"add","stat":"stress","expr":"0.05"} ] }
+  ],
+
+  "generators": [
+    { "on": "person", "spawn": "apartment", "count": "1", "child_stats": {
+      "size":     "clamp(0.35 + rand(1)*0.5, 0, 1)",
+      "coziness": "clamp(0.4 + rand(2)*0.5, 0, 1)",
+      "clutter":  "rand(3)",
+      "rent":     "clamp(0.4 + rand(4)*0.5, 0, 1)"
+    } },
+    { "on": "apartment", "spawn": "room", "count": "3 + size*2", "child_stats": {
+      "area": "clamp(0.2 + rand(1)*0.6, 0, 1)"
+    } }
+  ]
+}

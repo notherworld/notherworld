@@ -1,0 +1,11 @@
+[package]
+name = "owos-author"
+description = "Data-driven world authoring — load a self-bootstrapping world spec (JSON) into the scope-tree engine. Shared by the CLI hosts and the WASM/web console."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+owos-core = { path = "../owos-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }

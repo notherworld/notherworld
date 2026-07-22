@@ -1,0 +1,14 @@
+[package]
+name = "owos-ffi"
+description = "C ABI plugin surface for otherworldOS — link into Unreal, Godot, Unity, or any native host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# cdylib -> owos_ffi.dll / .so / .dylib for native engines.
+# rlib   -> lets Rust hosts (and our own smoke test) link it directly.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+owos-core = { path = "../owos-core" }

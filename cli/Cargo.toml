@@ -1,0 +1,215 @@
+[package]
+name = "owos-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+owos-core = { path = "../engine/owos-core" }
+owos-ffi = { path = "../engine/owos-ffi" }
+owos-author = { path = "../engine/owos-author" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[[bin]]
+name = "owos"
+path = "src/main.rs"
+
+[[bin]]
+name = "dive"
+path = "src/dive.rs"
+
+[[bin]]
+name = "multiverse"
+path = "src/multiverse.rs"
+
+[[bin]]
+name = "ffidemo"
+path = "src/ffidemo.rs"
+
+[[bin]]
+name = "worlds"
+path = "src/worlds.rs"
+
+[[bin]]
+name = "focus"
+path = "src/focus.rs"
+
+[[bin]]
+name = "collapse"
+path = "src/collapse.rs"
+
+[[bin]]
+name = "dragon"
+path = "src/dragon.rs"
+
+[[bin]]
+name = "play"
+path = "src/play.rs"
+
+[[bin]]
+name = "worldtree"
+path = "src/worldtree.rs"
+
+[[bin]]
+name = "simlod"
+path = "src/simlod.rs"
+
+[[bin]]
+name = "canon"
+path = "src/canon.rs"
+
+[[bin]]
+name = "ledger"
+path = "src/ledger.rs"
+
+[[bin]]
+name = "agency"
+path = "src/agency.rs"
+
+[[bin]]
+name = "interior"
+path = "src/interior.rs"
+
+[[bin]]
+name = "explore"
+path = "src/explore.rs"
+
+[[bin]]
+name = "town"
+path = "src/town.rs"
+
+[[bin]]
+name = "sim"
+path = "src/sim.rs"
+
+[[bin]]
+name = "block"
+path = "src/block.rs"
+
+[[bin]]
+name = "regime"
+path = "src/regime.rs"
+
+[[bin]]
+name = "pond"
+path = "src/pond.rs"
+
+[[bin]]
+name = "school"
+path = "src/school.rs"
+
+[[bin]]
+name = "tavern"
+path = "src/tavern.rs"
+
+[[bin]]
+name = "ferry"
+path = "src/ferry.rs"
+
+[[bin]]
+name = "metro"
+path = "src/metro.rs"
+
+[[bin]]
+name = "mega"
+path = "src/mega.rs"
+
+[[bin]]
+name = "oracle"
+path = "src/oracle.rs"
+
+[[bin]]
+name = "afterhours"
+path = "src/afterhours.rs"
+
+[[bin]]
+name = "lifetime"
+path = "src/lifetime.rs"
+
+[[bin]]
+name = "breaktest"
+path = "src/breaktest.rs"
+
+[[bin]]
+name = "saga"
+path = "src/saga.rs"
+
+[[bin]]
+name = "live"
+path = "src/live.rs"
+
+[[bin]]
+name = "lodaudit"
+path = "src/lodaudit.rs"
+
+[[bin]]
+name = "spacetrace"
+path = "src/spacetrace.rs"
+
+[[bin]]
+name = "cityprobe"
+path = "src/cityprobe.rs"
+
+[[bin]]
+name = "geoprobe"
+path = "src/geoprobe.rs"
+
+[[bin]]
+name = "partlab"
+path = "src/partlab.rs"
+
+[[bin]]
+name = "fieldprobe"
+path = "src/fieldprobe.rs"
+
+[[bin]]
+name = "packprobe"
+path = "src/packprobe.rs"
+
+[[bin]]
+name = "pathprobe"
+path = "src/pathprobe.rs"
+
+[[bin]]
+name = "islandprobe"
+path = "src/islandprobe.rs"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[[bin]]
+name = "rooftest"
+path = "src/rooftest.rs"
+
+
+
+[[bin]]
+name = "flowprobe"
+path = "src/flowprobe.rs"
+
+[[bin]]
+name = "atlasprobe"
+path = "src/atlasprobe.rs"
+
+[[bin]]
+name = "streamprobe"
+path = "src/streamprobe.rs"
+
+[[bin]]
+name = "tileprobe"
+path = "src/tileprobe.rs"
+
+[[bin]]
+name = "cosmos"
+path = "src/cosmos.rs"

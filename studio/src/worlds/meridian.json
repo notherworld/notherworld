@@ -1,0 +1,126 @@
+{
+  "name": "Meridian",
+  "rng_seed": 42,
+  "_note": "One city, six nested scales: metro > district > block > workplace > person > convo. Zoom any node to reveal it; the deeper you go, the more of the world materializes.",
+
+  "seed": [
+    { "kind": "metro", "name": "MERIDIAN",
+      "stats": { "population": 0.8, "rent_index": 1.0, "wealth": 0.5, "opportunity": 0.6, "unrest": 0.4, "crime": 0.3 },
+      "reveal": true, "park_children": true }
+  ],
+
+  "rules": [
+    { "on": "metro", "set": "rent_index",  "expr": "clamp(rent_index + 0.03*(wealth - 0.45) + 0.02*opportunity, 0.3, 2.5)" },
+    { "on": "metro", "set": "opportunity", "expr": "clamp(0.55 + 0.4*wealth - 0.5*unrest, 0, 1)" },
+    { "on": "metro", "set": "pressure",    "expr": "clamp(0.35*rent_index + 0.65*unrest, 0, 1)" },
+
+    { "on": "district", "set": "tension", "expr": "clamp(0.25 + 0.55*rent - 0.45*prosperity + 0.35*danger, 0, 1)" },
+    { "on": "district", "set": "vibe",    "expr": "clamp(0.6 + 0.4*prosperity - 0.5*tension, 0, 1)" },
+
+    { "on": "block", "set": "activity", "expr": "child_mean(morale)" },
+
+    { "on": "workplace", "set": "workload",  "expr": "clamp(workload + 0.14*demand - 0.12*productivity, 0, 1)" },
+    { "on": "workplace", "set": "boss_mood", "expr": "clamp(boss_mood + 0.10*(productivity - workload), 0.05, 1)" },
+    { "on": "workplace", "set": "crunch",    "expr": "clamp(0.2 + 0.6*workload + 0.3*(1 - boss_mood), 0, 1)" },
+
+    { "on": "person", "set": "mood",   "expr": "clamp(mood + 0.16*(0.5 + 0.35*boss_vibe - 0.5*stress - 0.3*job_pressure - mood), 0, 1)" },
+    { "on": "person", "set": "output", "expr": "clamp(output - 0.03, 0, 1)" },
+
+    { "on": "convo", "set": "tension", "expr": "clamp(tension - 0.02, 0, 1)" },
+    { "on": "convo", "set": "warmth",  "expr": "clamp(warmth - 0.28*gt(tension, 0.75), 0, 1)" }
+  ],
+
+  "rollups": [
+    { "parent": "metro",     "child_stat": "prosperity", "parent_stat": "wealth",       "reduce": "mean" },
+    { "parent": "metro",     "child_stat": "tension",    "parent_stat": "unrest",       "reduce": "mean" },
+    { "parent": "metro",     "child_stat": "danger",     "parent_stat": "crime",        "reduce": "mean" },
+    { "parent": "district",  "child_stat": "wealth",     "parent_stat": "prosperity",   "reduce": "mean" },
+    { "parent": "district",  "child_stat": "grit",       "parent_stat": "danger",       "reduce": "mean" },
+    { "parent": "workplace", "child_stat": "output",     "parent_stat": "productivity", "reduce": "mean" },
+    { "parent": "workplace", "child_stat": "mood",       "parent_stat": "morale",       "reduce": "mean" }
+  ],
+
+  "broadcasts": [
+    { "parent_stat": "rent_index", "child_stat": "rent",        "gain": 1.0 },
+    { "parent_stat": "workload",   "child_stat": "job_pressure","gain": 1.0 },
+    { "parent_stat": "boss_mood",  "child_stat": "boss_vibe",   "gain": 1.0 }
+  ],
+
+  "generators": [
+    { "on": "metro", "spawn": "district", "count": "4 + population*4", "child_stats": {
+      "prosperity": "clamp(0.3 + rand(1)*0.5, 0, 1)",
+      "danger":     "clamp(rand(2)*0.6, 0, 1)",
+      "population":  "clamp(0.3 + rand(3)*0.7, 0, 1)",
+      "vibe":        "rand(4)"
+    } },
+    { "on": "district", "spawn": "block", "count": "2 + population*3", "child_stats": {
+      "wealth":   "clamp(parent.prosperity + rand(1)*0.4 - 0.2, 0, 1)",
+      "grit":     "clamp(parent.danger + rand(2)*0.4 - 0.2, 0, 1)",
+      "busyness": "rand(3)"
+    } },
+    { "on": "block", "spawn": "workplace", "count": "2 + busyness*3", "child_stats": {
+      "prestige":     "clamp(parent.wealth + rand(1)*0.4 - 0.2, 0, 1)",
+      "demand":       "clamp(0.2 + rand(2)*0.7, 0, 1)",
+      "wage":         "8 + parent.wealth*34 + rand(3)*8",
+      "pace":         "clamp(0.3 + rand(4)*0.6, 0, 1)",
+      "boss_mood":    "clamp(0.4 + rand(5)*0.4, 0, 1)",
+      "workload":     "clamp(rand(6)*0.5, 0, 1)",
+      "productivity": "0.4"
+    } },
+    { "on": "workplace", "spawn": "person", "count": "3 + pace*4", "child_stats": {
+      "energy":    "clamp(0.5 + rand(1)*0.5, 0, 1)",
+      "money":     "6 + rand(2)*45",
+      "stress":    "clamp(parent.demand*0.5 + rand(3)*0.3, 0, 1)",
+      "mood":      "clamp(0.55 + rand(4)*0.35 - parent.demand*0.2, 0, 1)",
+      "skill":     "rand(5)",
+      "ambition":  "rand(6)",
+      "diligence": "clamp(0.3 + rand(7)*0.6, 0, 1)",
+      "social":    "rand(8)",
+      "humor":     "rand(9)",
+      "guarded":   "rand(10)",
+      "honesty":   "rand(11)",
+      "secretive": "rand(12)",
+      "rapport":   "0",
+      "output":    "clamp(0.3 + rand(13)*0.3, 0, 1)",
+      "wage":      "parent.wage"
+    } },
+    { "on": "person", "spawn": "convo", "count": "1", "child_stats": {
+      "warmth":   "clamp(0.35 + parent.rapport*0.3 + parent.social*0.2, 0, 1)",
+      "trust":    "clamp(0.2 + parent.social*0.3, 0, 1)",
+      "tension":  "clamp(0.15 + parent.guarded*0.4, 0, 1)",
+      "depth":    "0",
+      "interest": "clamp(0.4 + parent.social*0.4, 0, 1)"
+    } }
+  ],
+
+  "actions": [
+    { "on": "person", "name": "do_task",        "score": "diligence*energy*(0.5 + 0.6*job_pressure)",
+      "effects": [ {"op":"add","stat":"output","expr":"0.14 + skill*0.18"}, {"op":"add","stat":"energy","expr":"-0.12"}, {"op":"add","stat":"money","expr":"wage*0.02"}, {"op":"add","stat":"stress","expr":"0.04*job_pressure"} ] },
+    { "on": "person", "name": "grind_overtime", "score": "ambition*(0.3 + 0.7*job_pressure)*energy",
+      "effects": [ {"op":"add","stat":"output","expr":"0.24"}, {"op":"add","stat":"energy","expr":"-0.22"}, {"op":"add","stat":"stress","expr":"0.12"}, {"op":"add","stat":"money","expr":"wage*0.03"} ] },
+    { "on": "person", "name": "take_break",     "score": "(1-energy)*0.9 + stress*0.4",
+      "effects": [ {"op":"add","stat":"energy","expr":"0.22"}, {"op":"add","stat":"stress","expr":"-0.12"} ] },
+    { "on": "person", "name": "chat_coworker",  "score": "social*(0.4 + 0.4*mood)*0.8",
+      "effects": [ {"op":"add","stat":"stress","expr":"-0.06"}, {"op":"add","stat":"output","expr":"-0.03"}, {"op":"add","stat":"energy","expr":"-0.02"} ] },
+    { "on": "person", "name": "slack_off",      "score": "(1-diligence)*(0.3 + 0.6*stress)",
+      "effects": [ {"op":"add","stat":"output","expr":"-0.05"}, {"op":"add","stat":"energy","expr":"0.06"}, {"op":"add","stat":"stress","expr":"-0.03"} ] },
+    { "on": "person", "name": "seek_promotion", "score": "ambition*skill*gt(boss_vibe,0.55)*gt(output,0.45)",
+      "effects": [ {"op":"add","stat":"money","expr":"6"}, {"op":"add","stat":"stress","expr":"0.08"} ] },
+
+    { "on": "convo", "name": "small_talk", "score": "0",
+      "effects": [ {"op":"add","stat":"warmth","expr":"0.06"}, {"op":"add","stat":"tension","expr":"-0.03"}, {"op":"add","stat":"interest","expr":"-0.05"} ] },
+    { "on": "convo", "name": "joke", "score": "0",
+      "effects": [ {"op":"add","stat":"warmth","expr":"0.04 + 0.14*parent.humor"}, {"op":"add","stat":"tension","expr":"iff(gt(parent.humor,0.5), -0.06, 0.12)"}, {"op":"add","stat":"interest","expr":"0.05"} ] },
+    { "on": "convo", "name": "open_up", "score": "0",
+      "effects": [ {"op":"add","stat":"trust","expr":"0.12"}, {"op":"add","stat":"warmth","expr":"0.06"}, {"op":"add","stat":"depth","expr":"0.10"}, {"op":"add","stat":"tension","expr":"-0.02"} ] },
+    { "on": "convo", "name": "probe", "score": "0",
+      "effects": [ {"op":"add","stat":"trust","expr":"iff(gt(trust, parent.guarded), 0.14, -0.18)"}, {"op":"add","stat":"tension","expr":"iff(gt(trust, parent.guarded), -0.04, 0.22)"}, {"op":"add","stat":"depth","expr":"iff(gt(trust, parent.guarded), 0.20, 0.03)"} ] },
+    { "on": "convo", "name": "ask_secret", "score": "0",
+      "effects": [ {"op":"add","stat":"depth","expr":"iff(gt(trust,0.7), 0.30, 0)"}, {"op":"add","stat":"trust","expr":"iff(gt(trust,0.7), 0.05, -0.25)"}, {"op":"add","stat":"tension","expr":"iff(gt(trust,0.7), -0.05, 0.30)"}, {"op":"add","stat":"warmth","expr":"iff(gt(trust,0.7), 0.08, -0.15)"} ] }
+  ],
+
+  "events": [
+    { "on": "district",  "when": "gt(tension, 0.85)",  "label": "unrest boils over into the streets", "do": [ {"op":"add","stat":"danger","expr":"0.08"} ] },
+    { "on": "workplace", "when": "gt(workload, 0.85)",  "label": "deadline crunch — the whole office is underwater", "do": [ {"op":"add","stat":"boss_mood","expr":"-0.15"} ] }
+  ]
+}

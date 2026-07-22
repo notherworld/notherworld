@@ -1,0 +1,131 @@
+{
+  "_note": "EMBERHOLD — a colony living off a shared, depleting commons. NO host code, NO modes: it self-drives from build(json)+step(). The bet: a boom-bust POPULATION CYCLE (tragedy-of-the-commons + predator/prey) emerges from individual utility choices alone. Colonists forage the parent 'hold' stock (broadcast down as `field`, foraged draw rolled back up). When the field is thin, a colonist either SHARES with kin (affect along a `kin` edge) or HOARDS. Sharers keep kin alive; hoarders let the weak starve, the population crashes, the field recovers, and the cycle restarts. Kinship (link) decides who survives each lean season, so WHICH lineages endure is emergent history. Everything is a flat crowd of `colonist` siblings under one `hold`, so the whole colony stays Detailed/active and kin-links form among co-located peers.",
+
+  "rng_seed": 7,
+
+  "seed": [
+    {
+      "kind": "hold",
+      "name": "Emberhold",
+      "reveal": true,
+      "stats": { "field": 1.0, "regrow": 0.055, "draw": 0.0, "births": 0.0, "deaths": 0.0 },
+      "generators_note": "reveal:true runs the generator below, spawning the founding colonists as Detailed children of the hold."
+    }
+  ],
+
+  "generators": [
+    {
+      "on": "hold",
+      "spawn": "colonist",
+      "count": "12",
+      "child_stats": {
+        "food": "0.55 + 0.25*rand(1)",
+        "grit": "0.30 + 0.55*rand(2)",
+        "kinship": "0.25 + 0.6*rand(3)",
+        "age": "0.05 + 0.20*rand(4)",
+        "ration": "parent.field",
+        "alive": "1"
+      }
+    }
+  ],
+
+  "broadcasts": [
+    { "parent_stat": "field", "child_stat": "ration", "gain": 1.0 }
+  ],
+
+  "rollups": [
+    { "parent": "hold", "child_stat": "took",  "parent_stat": "draw",   "reduce": "sum", "drain": true },
+    { "parent": "hold", "child_stat": "alive", "parent_stat": "living", "reduce": "sum" }
+  ],
+
+  "rules": [
+    { "on": "colonist", "set": "age",  "expr": "age + 0.02" },
+
+    { "on": "colonist", "set": "food",
+      "expr": "clamp(food - 0.04 - 0.015*age + 0.008*edge_count(kin), 0, 1.6)" },
+
+    { "on": "colonist", "set": "grit",
+      "expr": "clamp(grit + 0.01*gt(food,0.6) - 0.02*lt(food,0.25), 0, 1)" },
+
+    { "on": "hold", "set": "field",
+      "expr": "clamp(field + regrow*(1 - field) - draw*0.05, 0, 1)" },
+
+    { "on": "hold", "set": "scarcity", "expr": "1 - field" }
+  ],
+
+  "actions": [
+    { "on": "colonist", "name": "forage",
+      "score": "gt(ration,0.03)*(0.5 + 1.5*lt(food,0.85))*1.2",
+      "effects": [
+        { "op": "add", "stat": "food", "expr": "0.22*ration*(0.6+0.7*grit)" },
+        { "op": "set", "stat": "took", "expr": "0.22*ration*(0.6+0.7*grit)" }
+      ]
+    },
+
+    { "on": "colonist", "name": "bond",
+      "score": "gt(food,0.5)*kinship*lt(edge_count(kin),4)*0.7",
+      "effects": [
+        { "op": "link", "stat": "kin:colonist" }
+      ]
+    },
+
+    { "on": "colonist", "name": "share",
+      "score": "gt(food,0.95)*kinship*gt(edge_count(kin),0)*(1 - edge_min(kin,food))*0.8",
+      "effects": [
+        { "op": "affect", "stat": "kin:food", "expr": "0.15*gt(food, target.food)*lt(target.food,0.5)" },
+        { "op": "add", "stat": "food", "expr": "-0.12" }
+      ]
+    },
+
+    { "on": "colonist", "name": "hoard",
+      "score": "lt(kinship,0.4)*gt(scarcity,0.5)*0.8",
+      "effects": [
+        { "op": "add", "stat": "food", "expr": "0.02" }
+      ]
+    },
+
+    { "on": "colonist", "name": "rest",
+      "score": "0.15",
+      "effects": []
+    }
+  ],
+
+  "events": [
+    { "on": "colonist", "when": "gt(food,0.9)*gt(age,0.3)*lt(age,1.7)*chance(0.4)",
+      "label": "bore a child",
+      "do": [
+        { "op": "add", "stat": "food", "expr": "-0.45" },
+        { "op": "spawn", "stat": "colonist", "expr": "child of" },
+        { "op": "add", "stat": "births", "expr": "1" }
+      ]
+    },
+
+    { "on": "colonist", "when": "lt(food,0.02)",
+      "label": "starved",
+      "do": [
+        { "op": "set", "stat": "alive", "expr": "0" },
+        { "op": "unlink", "stat": "kin" },
+        { "op": "despawn" }
+      ]
+    },
+
+    { "on": "colonist", "when": "gt(age,2.4)",
+      "label": "died of old age",
+      "do": [
+        { "op": "set", "stat": "alive", "expr": "0" },
+        { "op": "unlink", "stat": "kin" },
+        { "op": "despawn" }
+      ]
+    },
+
+    { "on": "hold", "when": "lt(field,0.12)",
+      "label": "the fields run bare — a lean season",
+      "do": []
+    },
+
+    { "on": "hold", "when": "gt(living,22)",
+      "label": "Emberhold swells — the hold is crowded",
+      "do": []
+    }
+  ]
+}

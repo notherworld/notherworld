@@ -1,0 +1,91 @@
+{
+  "_note": "THE ALCHEMISTS' GUILD — a pure-data probe of DISCRETE SYMBOLIC STATE, the least-explored territory. Not city-shaped at all: named item TYPES (herb, crystal), a RECIPE that consumes one of each to brew a potion, scarce reagents that REGROW, competition among apprentices, and ONE masters-seat claimed by the first to deliver 3 potions. Stress points: multi-type discrete inventory (typed claim edges), recipe gating (edge_count over held types), CONSUMPTION of another entity (affect used=1 + the item despawns itself — there is no 'despawn other' effect, this tests whether the pattern composes), periodic spawning (clock event self-reset), exclusive win (claim seat), and the master then mentoring the WEAKEST apprentice (@min pick).",
+
+  "rng_seed": 11,
+
+  "seed": [
+    { "kind": "guild", "name": "the Emberwick Guild", "reveal": true, "stats": { "founded": 1 } }
+  ],
+
+  "generators": [
+    { "on": "guild", "spawn": "apprentice", "count": "5",
+      "child_stats": {
+        "talent":   "0.3 + 0.5*rand(1)",
+        "fatigue":  "0.2*rand(2)",
+        "potions":  "0",
+        "is_master":"0"
+      }
+    },
+    { "on": "guild", "spawn": "herb",    "count": "4" },
+    { "on": "guild", "spawn": "crystal", "count": "3" },
+    { "on": "guild", "spawn": "grove",   "count": "1", "child_stats": { "clock": "0" } },
+    { "on": "guild", "spawn": "mine",    "count": "1", "child_stats": { "clock": "3" } },
+    { "on": "guild", "spawn": "seat",    "count": "1" }
+  ],
+
+  "rules": [
+    { "on": "grove", "set": "clock", "expr": "clock + 1" },
+    { "on": "mine",  "set": "clock", "expr": "clock + 1" },
+    { "on": "herb",    "set": "free_h", "expr": "1 - held" },
+    { "on": "crystal", "set": "free_c", "expr": "1 - held" },
+    { "on": "apprentice", "set": "fatigue", "expr": "clamp(fatigue - 0.02, 0, 1)" },
+    { "on": "apprentice", "set": "is_master", "expr": "gt(edge_count(throne), 0)" },
+    { "on": "guild", "set": "mastered", "expr": "child_max(is_master)" },
+    { "on": "guild", "set": "brews",    "expr": "child_sum(potions)" }
+  ],
+
+  "actions": [
+    { "on": "apprentice", "name": "gather_herb",
+      "_note": "AVAILABILITY SENSING, composed: here_* has no kind filter, so items ADVERTISE themselves — an unheld herb keeps free_h=1 (rule), the claimant marks it held at claim time (the affect_set below), and the gather score reads here_sum(free_h). Three pieces where one here_count(kind) would do — friction, but it composes.",
+      "score": "lt(edge_count(sack_h),1) * lt(fatigue,0.8) * gt(here_sum(free_h),0) * (0.6 + 0.5*talent)",
+      "effects": [ { "op": "claim", "stat": "sack_h:herb" },
+                   { "op": "affect_set", "stat": "sack_h:held", "expr": "1" } ]
+    },
+    { "on": "apprentice", "name": "gather_crystal",
+      "score": "lt(edge_count(sack_c),1) * lt(fatigue,0.8) * gt(here_sum(free_c),0) * (0.55 + 0.5*talent)",
+      "effects": [ { "op": "claim", "stat": "sack_c:crystal" },
+                   { "op": "affect_set", "stat": "sack_c:held", "expr": "1" } ]
+    },
+    { "on": "apprentice", "name": "brew_potion",
+      "score": "ge(edge_count(sack_h),1) * ge(edge_count(sack_c),1) * 2.5",
+      "effects": [
+        { "op": "affect_set", "stat": "sack_h:used", "expr": "1" },
+        { "op": "affect_set", "stat": "sack_c:used", "expr": "1" },
+        { "op": "unlink", "stat": "sack_h" },
+        { "op": "unlink", "stat": "sack_c" },
+        { "op": "add", "stat": "potions", "expr": "1" },
+        { "op": "add", "stat": "fatigue", "expr": "0.45" }
+      ]
+    },
+    { "on": "apprentice", "name": "claim_the_seat",
+      "score": "ge(potions,3) * lt(parent.mastered,0.5) * 4",
+      "effects": [ { "op": "claim", "stat": "throne:seat" } ]
+    },
+    { "on": "apprentice", "name": "mentor_the_weakest",
+      "score": "is_master * 1.5",
+      "effects": [ { "op": "affect", "stat": "co:talent@min:target.talent", "expr": "0.02 * lt(target.is_master, 0.5)" } ]
+    },
+    { "on": "apprentice", "name": "rest",
+      "score": "fatigue * 1.4",
+      "effects": [ { "op": "add", "stat": "fatigue", "expr": "-0.3" } ]
+    },
+    { "on": "apprentice", "name": "loiter",
+      "score": "0.15",
+      "effects": [] }
+  ],
+
+  "events": [
+    { "on": "herb",    "when": "gt(used, 0.5)", "label": "a sprig is ground into the cauldron", "do": [ { "op": "despawn" } ] },
+    { "on": "crystal", "when": "gt(used, 0.5)", "label": "a crystal shatters into the brew",   "do": [ { "op": "despawn" } ] },
+    { "on": "grove", "when": "gt(clock, 5)", "label": "new herbs push through the grove soil",
+      "do": [ { "op": "spawn", "stat": "herb", "expr": "herb" }, { "op": "set", "stat": "clock", "expr": "0" } ] },
+    { "on": "mine", "when": "gt(clock, 8)", "label": "a fresh crystal seam glitters in the mine",
+      "do": [ { "op": "spawn", "stat": "crystal", "expr": "crystal" }, { "op": "set", "stat": "clock", "expr": "0" } ] },
+    { "on": "apprentice", "when": "ge(potions, 3) * lt(celebrated, 0.5)", "label": "presents a third flawless potion to the guild",
+      "do": [ { "op": "set", "stat": "celebrated", "expr": "1" } ] },
+    { "on": "apprentice", "when": "gt(is_master, 0.5)", "label": "★ takes the masters' seat — the guild has a new master",
+      "do": [] },
+    { "on": "guild", "when": "gt(brews, 7.5)", "label": "the cellar shelves fill with potions — a prosperous season",
+      "do": [] }
+  ]
+}

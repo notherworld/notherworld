@@ -1,0 +1,62 @@
+{
+  "_note": "TRADE — the PROBE for TEMPLATE #5 (prices + merchant). Two markets under one hold: PRODUCER (stock piles up → cheap) and CONSUMER (stock drains → dear). Left alone, the price GAP blows wide open. A MERCHANT co-located with both buys from whichever is cheapest (@min price) and sells to whichever is dearest (@max price), moving stock from surplus to scarcity — so his running NARROWS the gap. THE GATE: the hold's `field` (= the price gap, what `live` sparklines) should START HIGH and TREND DOWN as he trades. Flip the merchant's scores to 0 (the counterfactual) and the gap stays pinned wide. Distant scarcity reaches a buyer as HIS price, no event feed — the catalog's information-carrier.",
+
+  "rng_seed": 4,
+
+  "seed": [
+    { "kind": "hold", "name": "the Trade Road", "reveal": true, "stats": { "field": 0 } }
+  ],
+
+  "generators": [
+    { "_markets_note": "index 0 = the PRODUCER (starts flush, cheap), index 1 = the CONSUMER (starts bare, dear). `flow` = per-tick stock change absent trade: the producer makes goods, the consumer eats them.",
+      "on": "hold", "spawn": "market", "count": "2",
+      "child_stats": {
+        "role":  "index",
+        "stock": "iff(eq(index,0), 9, 1)",
+        "flow":  "iff(eq(index,0), 0.13, 0 - 0.13)",
+        "price": "iff(eq(index,0), 0.6, 2.7)"
+      } },
+    { "on": "hold", "spawn": "merchant", "count": "1",
+      "child_stats": { "carry": "0", "cap": "3", "cd": "0", "trips": "0", "price": "1.5" } }
+  ],
+
+  "rules": [
+    { "_price_note": "★ PRICE = f(STOCK) (template #5). Scarcity is dear, glut is cheap — the proven suppression pattern applied to commerce. Producer + consumer flows push stock (and so price) apart every tick; the merchant is the only force pulling them back.",
+      "on": "market", "set": "stock", "expr": "clamp(stock + flow, 0, 12)" },
+    { "on": "market", "set": "price", "expr": "clamp(3 - 0.28*stock, 0.3, 3)" },
+
+    { "_merchant_mid_note": "the merchant carries no price of its own; park its `price` at the MEAN of the two markets (here_mean over its co-located peers) so it never becomes the hold's min or max — then the hold's gap below reads the real market extremes, not the trader.",
+      "on": "merchant", "set": "price", "expr": "here_mean(price)" },
+    { "on": "merchant", "set": "cd", "expr": "max(0, cd - 1)" },
+
+    { "_gap_note": "THE GATE — the hold's `field` is the live price gap (dearest minus cheapest), which `live` sparklines. Watch it fall as the merchant runs.",
+      "on": "hold", "set": "field", "expr": "child_max(price) - child_min(price)" }
+  ],
+
+  "actions": [
+    { "_buy_note": "★ BUY LOW (template #5) — when he has room and isn't mid-trip, buy a unit from the CHEAPEST co-located market (@min:target.price picks it): its stock drops (so its price RISES), his carry grows. cd = a short haul before the next deal (the travel that Atlas will make a real route).",
+      "on": "merchant", "name": "buy_low",
+      "score": "lt(carry,cap)*le(cd,0.5)*1.0",
+      "effects": [
+        { "op": "affect", "stat": "co:stock@min:target.price", "expr": "0 - 1" },
+        { "op": "add",    "stat": "carry", "expr": "1" },
+        { "op": "set",    "stat": "cd",    "expr": "1" }
+      ] },
+    { "_sell_note": "★ SELL HIGH — carrying goods and not mid-trip, sell a unit into the DEAREST market (@max:target.price): its stock rises (price FALLS), his carry shrinks, a trip is booked. Buying-cheap + selling-dear both close the gap from opposite ends.",
+      "on": "merchant", "name": "sell_high",
+      "score": "gt(carry,0.5)*le(cd,0.5)*1.1",
+      "effects": [
+        { "op": "affect", "stat": "co:stock@max:target.price", "expr": "1" },
+        { "op": "add",    "stat": "carry", "expr": "0 - 1" },
+        { "op": "add",    "stat": "trips", "expr": "1" },
+        { "op": "set",    "stat": "cd",    "expr": "1" }
+      ] },
+    { "on": "merchant", "name": "haul", "score": "0.2", "effects": [] }
+  ],
+
+  "events": [
+    { "on": "hold", "when": "lt(field,1.2)", "label": "⚖ the price gap narrows — goods are flowing", "do": [] },
+    { "on": "hold", "when": "lt(field,0.7)", "label": "🤝 the two markets nearly converge — arbitrage done its work", "do": [] },
+    { "on": "merchant", "when": "gt(trips,18)", "label": "the merchant has run the road many times", "do": [] }
+  ]
+}

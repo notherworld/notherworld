@@ -1,0 +1,21 @@
+/target
+**/*.rs.bk
+
+# secrets — never commit API keys
+.env
+.env.local
+*.local
+
+# personal / machine-local Claude Code settings
+.claude/settings.local.json
+
+# node / web build artifacts
+node_modules/
+studio/dist/
+dist/
+
+# wasm-pack output — regenerated via `wasm-pack build` (see CLAUDE.md)
+studio/src/owos/
+
+# local AI-session context (personal — never commit)
+CLAUDE.local.md

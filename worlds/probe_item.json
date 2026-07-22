@@ -1,0 +1,41 @@
+{
+  "_note": "BREAK-PROBE v2: discrete inventory with the new `claim` prim. A single MASTER KEY; exactly ONE guard may hold it (claim = exclusive acquisition). Then test HANDOFF: the holder, when off-duty, releases (unlink) so another guard can claim it. Success = the BROKEN event (>1 holder) NEVER fires, and the key changes hands over time.",
+  "rng_seed": 2,
+  "seed": [
+    { "kind": "post", "name": "Guard Post", "reveal": true, "stats": {} }
+  ],
+  "generators": [
+    { "on": "post", "spawn": "guard", "count": "3",
+      "child_stats": { "duty": "0.3 + 0.6*rand(1)", "stamina": "0.5 + 0.4*rand(2)", "has_key": "0" } },
+    { "on": "post", "spawn": "key", "count": "1",
+      "child_stats": { "held": "0" } }
+  ],
+  "actions": [
+    { "on": "guard", "name": "claim_key",
+      "score": "duty*gt(stamina,0.3)*lt(has_key,0.5)*0.8",
+      "effects": [ { "op": "claim", "stat": "holds:key" } ]
+    },
+    { "on": "guard", "name": "hand_off_key",
+      "score": "gt(has_key,0.5)*lt(stamina,0.3)*1.0",
+      "effects": [ { "op": "unlink", "stat": "holds" } ]
+    },
+    { "on": "guard", "name": "patrol",
+      "score": "0.2",
+      "effects": [ { "op": "add", "stat": "stamina", "expr": "-0.05" } ]
+    }
+  ],
+  "rules": [
+    { "on": "guard", "set": "has_key",  "expr": "gt(edge_count(holds),0)" },
+    { "on": "guard", "set": "stamina",  "expr": "clamp(stamina + 0.03*lt(has_key,0.5) - 0.02*has_key, 0, 1)" },
+    { "on": "key",   "set": "held",     "expr": "edge_count(holds)" }
+  ],
+  "events": [
+    { "on": "key", "when": "gt(held,1.5)",
+      "label": "BROKEN: the key is held by more than one guard at once",
+      "do": [] },
+    { "on": "guard", "when": "gt(has_key,0.5)*lt(ever_held,0.5)",
+      "label": "took custody of the master key",
+      "do": [ { "op": "set", "stat": "ever_held", "expr": "1" } ]
+    }
+  ]
+}

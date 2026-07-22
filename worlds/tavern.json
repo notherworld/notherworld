@@ -1,0 +1,38 @@
+{
+  "rules": [
+    { "on": "patron", "set": "thirst", "expr": "clamp(thirst + 0.05, 0, 1)" },
+    { "on": "patron", "set": "hunger", "expr": "clamp(hunger + 0.03, 0, 1)" },
+    { "on": "patron", "set": "tipsy",  "expr": "clamp(tipsy - 0.03, 0, 1)" },
+    { "on": "patron", "set": "mood",   "expr": "clamp(mood + 0.05*(0.4 + 0.5*tipsy - mood), 0, 1)" },
+    { "on": "tavern", "set": "rowdiness", "expr": "child_mean(rowdy)" }
+  ],
+  "actions": [
+    { "on": "patron", "name": "order_ale",  "score": "thirst*(1 - taste)*gt(coin,2)*1.3",
+      "effects": [ {"op":"set","stat":"thirst","expr":"clamp(thirst-0.5,0,1)"}, {"op":"set","stat":"coin","expr":"max(coin-2,0)"}, {"op":"set","stat":"tipsy","expr":"clamp(tipsy+0.15,0,1)"} ] },
+    { "on": "patron", "name": "order_wine", "score": "thirst*taste*gt(coin,4)*1.3",
+      "effects": [ {"op":"set","stat":"thirst","expr":"clamp(thirst-0.5,0,1)"}, {"op":"set","stat":"coin","expr":"max(coin-4,0)"}, {"op":"set","stat":"tipsy","expr":"clamp(tipsy+0.2,0,1)"} ] },
+    { "on": "patron", "name": "order_stew", "score": "hunger*gt(coin,3)*1.0",
+      "effects": [ {"op":"set","stat":"hunger","expr":"clamp(hunger-0.6,0,1)"}, {"op":"set","stat":"coin","expr":"max(coin-3,0)"} ] },
+    { "on": "patron", "name": "order_bread","score": "hunger*gt(coin,1)*0.5",
+      "effects": [ {"op":"set","stat":"hunger","expr":"clamp(hunger-0.3,0,1)"}, {"op":"set","stat":"coin","expr":"max(coin-1,0)"} ] },
+    { "on": "patron", "name": "gamble", "score": "gambler*gt(coin,5)*(0.4+0.4*tipsy)",
+      "effects": [ {"op":"add","stat":"coin","expr":"iff(chance(0.48), 6, -6)"} ] },
+    { "on": "patron", "name": "sing", "score": "tipsy*mood*chance(0.5)*0.7",
+      "effects": [ {"op":"set","stat":"mood","expr":"clamp(mood+0.05,0,1)"} ] },
+    { "on": "patron", "name": "flirt", "score": "lover*social*(0.3+0.4*tipsy)",
+      "effects": [ {"op":"set","stat":"mood","expr":"clamp(mood+0.06,0,1)"} ] },
+    { "on": "patron", "name": "brawl", "score": "rowdy*tipsy*chance(0.18)",
+      "effects": [ {"op":"set","stat":"tipsy","expr":"clamp(tipsy-0.1,0,1)"}, {"op":"set","stat":"mood","expr":"clamp(mood-0.2,0,1)"} ] },
+    { "on": "patron", "name": "doze", "score": "tipsy*gt(hour,8)*0.9",
+      "effects": [ {"op":"set","stat":"tipsy","expr":"clamp(tipsy-0.05,0,1)"} ] },
+    { "on": "patron", "name": "propose", "score": "lover*gt(mood,0.9)*gt(coin,40)*gt(tipsy,0.85)",
+      "effects": [ {"op":"set","stat":"mood","expr":"1"} ] },
+    { "on": "patron", "name": "leave", "score": "gt(hour,9)*0.5 + le(coin,2)*0.7 + gt(tipsy,0.95)*0.6",
+      "effects": [ {"op":"despawn"} ] },
+    { "on": "patron", "name": "linger", "score": "0.06 + social*0.1", "effects": [] }
+  ],
+  "events": [
+    { "on": "tavern", "when": "gt(child_max(tipsy),0.85)*gt(rowdiness,0.5)",
+      "label": "a brawl erupts across the taproom", "do": [] }
+  ]
+}

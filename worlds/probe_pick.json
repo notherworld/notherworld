@@ -1,0 +1,30 @@
+{
+  "_note": "PROBE: the @max/@min pick selector on affect — act on THE one best target. One attacker among 4 co-located fighters strikes ONLY the highest-prowess peer and cares ONLY for the weakest. Expect exactly ONE 'took the hit' and ONE 'got the care' in the chronicle; more = pick is broken (hit everyone), zero = pick hit nobody.",
+  "rng_seed": 7,
+  "seed": [ { "kind": "arena", "name": "the pit", "reveal": true } ],
+  "generators": [
+    { "on": "arena", "spawn": "fighter", "count": "4",
+      "child_stats": {
+        "attacker": "iff(eq(index,0),1,0)",
+        "prowess":  "0.2*index",
+        "frailty":  "iff(eq(index,1), 0.9, 0.2)",
+        "hp":       "1",
+        "care":     "0"
+      }
+    }
+  ],
+  "actions": [
+    { "on": "fighter", "name": "duel_the_best_and_mend_the_frail",
+      "score": "attacker",
+      "effects": [
+        { "op": "affect", "stat": "co:hp@max:target.prowess", "expr": "-0.2" },
+        { "op": "affect", "stat": "co:care@min:target.hardiness", "expr": "0" },
+        { "op": "affect", "stat": "co:care@max:target.frailty", "expr": "1" }
+      ]
+    }
+  ],
+  "events": [
+    { "on": "fighter", "when": "lt(hp,0.9)",   "label": "took the hit (should be ONLY the top-prowess fighter 4)", "do": [] },
+    { "on": "fighter", "when": "gt(care,0.5)", "label": "got the care (should be ONLY the frail fighter 2)",       "do": [] }
+  ]
+}

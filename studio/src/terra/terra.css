@@ -1,0 +1,183 @@
+/* ATLAS — full-screen city-scale view. Calm, dark, pixel-crisp. */
+
+:root {
+  --ink: #eef2f8;
+  --ink-dim: #9aa6bd;
+  --plate: rgba(10, 14, 22, 0.72);
+  --line: rgba(255, 255, 255, 0.10);
+  --accent: #f2c14e;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #atlas {
+  margin: 0;
+  height: 100%;
+  width: 100%;
+  background: #05070c;
+  overflow: hidden;
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, monospace;
+  color: var(--ink);
+}
+
+.atlas-root {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(120% 100% at 50% 0%, #0b1120 0%, #05070c 70%);
+}
+
+/* FLOOR SELECTOR — climb the open building's storeys (top-right, under back) */
+.atlas-floorsel { position: absolute; top: 64px; right: 16px; display: flex; gap: 8px;
+  align-items: center; background: #10151fd9; border: 1px solid #2a3242; border-radius: 8px;
+  padding: 6px 10px; color: #cfd6e4; font-family: inherit; font-size: 13px; z-index: 5; }
+.atlas-floorsel button { background: #1b2333; color: #cfd6e4; border: 1px solid #2a3242;
+  border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+.atlas-floorsel button:hover { background: #263043; }
+
+/* PAN wrapper — canvas + labels ride together during a live drag (CSS translate,
+   GPU); the committed pan re-renders the world at the new centre on release. */
+.atlas-pan { position: absolute; inset: 0; will-change: transform; isolation: isolate; }
+
+/* DAY/NIGHT GRADE — a multiply tint over the pixel canvas (below the labels). Its colour
+   is set live from the sim clock; the transition eases it so the light slides smoothly
+   through dawn → day → dusk → night instead of stepping each heartbeat. */
+.atlas-grade {
+  position: absolute; inset: 0;
+  background-color: rgb(255, 253, 248);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  transition: background-color 0.7s linear;
+}
+
+/* THE pixel buffer: one GRID×GRID canvas scaled to fill the screen with hard
+   nearest-neighbour edges. Every mark on the map is a pixel in here. */
+.atlas-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  /* fill: the display canvas's internal resolution IS the visible window (fitBox,
+     device aspect — a source-rect blit of the overscan bake), so stretching to
+     100% never distorts and never crops the scope. Labels match via the SVG's
+     synchronized viewBox. */
+  object-fit: fill;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* transparent label/hit overlay above the pixels — text stays crisp */
+.atlas-labels {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ---- district labels ---- */
+.atlas-name {
+  font-size: 26px;
+  font-weight: 700;
+  fill: var(--ink);
+  letter-spacing: 0.5px;
+  paint-order: stroke;
+  stroke: #05070c;
+  stroke-width: 5px;
+  stroke-linejoin: round;
+}
+.atlas-name.core { fill: var(--accent); font-size: 30px; }
+.atlas-sub {
+  font-size: 15px;
+  fill: var(--ink-dim);
+  paint-order: stroke;
+  stroke: #05070c;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.atlas-hoverline {
+  stroke: #ffffff;
+  stroke-width: 3;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.35));
+}
+
+/* ---- chrome ---- */
+/* ---- controls (top-right buttons) ---- */
+.atlas-reseed, .atlas-back, .atlas-hudtoggle {
+  position: absolute;
+  top: 24px;
+  padding: 10px 16px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.atlas-hudtoggle { right: 26px; }
+.atlas-reseed { right: 150px; }
+.atlas-back { right: 274px; }
+.atlas-reseed:hover, .atlas-back:hover, .atlas-hudtoggle:hover { border-color: var(--accent); background: rgba(20,26,38,0.85); }
+
+/* clean-map view: hide the label TEXT but keep the invisible hit-areas clickable */
+.atlas-labels.labels-off text { display: none; }
+
+/* ---- THE ONE HUD (bottom-left): breadcrumb + scope stats + legend ---- */
+.atlas-hud {
+  position: absolute;
+  bottom: 26px;
+  left: 26px;
+  width: 232px;
+  padding: 14px 18px;
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.atlas-hud-trail {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 1px;
+  font-size: 12px; margin-bottom: 8px;
+}
+.atlas-hud-trail .sep { color: var(--ink-dim); margin: 0 3px; opacity: 0.6; }
+.atlas-hud-trail .crumb {
+  font: inherit; font-size: 12px; background: none; border: none;
+  color: var(--ink-dim); cursor: pointer; padding: 1px 3px; border-radius: 5px;
+}
+.atlas-hud-trail .crumb:hover { color: var(--ink); background: rgba(255,255,255,0.06); }
+.atlas-hud-trail .crumb.on { color: var(--accent); font-weight: 700; }
+
+.atlas-hud-name { font-size: 18px; font-weight: 700; letter-spacing: 0.3px; }
+.atlas-hud-desc { margin-top: 2px; font-size: 12px; color: var(--ink-dim); font-style: italic; }
+.atlas-hud-stats { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
+.atlas-hud-div { height: 1px; background: var(--line); margin: 12px 0 10px; }
+.atlas-hud-key { display: flex; flex-direction: column; gap: 3px; }
+
+.atlas-stat { display: flex; align-items: center; gap: 10px; font-size: 11px; }
+.atlas-stat-l { width: 54px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.6px; }
+.atlas-bar { flex: 1; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
+.atlas-bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
+.atlas-legend-row { display: flex; align-items: center; gap: 8px; }
+.atlas-legend-row .sw {
+  width: 11px; height: 11px; border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); flex: none;
+}
+.atlas-legend-row span { color: var(--ink-dim); }
+.atlas-legend-row span.build { color: var(--ink); }
+
+.atlas-dive {
+  font-size: 13px; fill: var(--accent); font-weight: 700;
+  paint-order: stroke; stroke: #05070c; stroke-width: 4px; stroke-linejoin: round;
+}
+
+.atlas-err {
+  position: fixed; inset: 0; display: grid; place-items: center;
+  padding: 40px; text-align: center; color: #ff9a9a; line-height: 1.6;
+}

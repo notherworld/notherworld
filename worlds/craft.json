@@ -1,0 +1,104 @@
+{
+  "_note": "CRAFT — a crafting/tech TREE as pure data. No host, no modes: it self-drives from build(json)+step(). A crowd of `crafter` siblings each run a utility AI over a DAG of recipes: gather raw mats (wood/stone/fiber/ore) → saw planks → forge an axe (doubles chopping) → raise a furnace → smelt ore into ingots → forge a pickaxe (opens the ore seam) → machine gears → assemble the ENGINE (the capstone). Every 'recipe' is just an ACTION whose effects consume inputs and produce an output; every 'unlock' is an EVENT on the rising edge of owning a tool. The engine has NO idea what 'wood' or 'a furnace' is — it's all stats and gated effects. The chronicle reads as a tech-progression story; the oracle's action tally = the tree, exercised.",
+
+  "rng_seed": 11,
+
+  "seed": [
+    { "kind": "workshop", "name": "The Foundry", "reveal": true,
+      "stats": { "engines": 0 } }
+  ],
+
+  "generators": [
+    { "on": "workshop", "spawn": "crafter", "count": "4",
+      "child_stats": {
+        "log": "0", "plank": "0", "stone": "0", "fiber": "0",
+        "ore": "0", "ingot": "0", "gear": "0",
+        "has_axe": "0", "has_furnace": "0", "has_pickaxe": "0", "has_engine": "0",
+        "knack": "0.7 + 0.5*rand(1)"
+      }
+    }
+  ],
+
+  "rollups": [
+    { "parent": "workshop", "child_stat": "has_engine", "parent_stat": "engines", "reduce": "sum" }
+  ],
+
+  "actions": [
+    { "_gather_note": "RAW GATHERING — always available, each capped so a crafter tops up what it's short on then moves on. A tool multiplies its yield (axe→wood, pickaxe→stone/ore). Ore barely trickles until there's a furnace worth feeding, then a pickaxe cracks the seam open.",
+      "on": "crafter", "name": "chop wood",
+      "score": "0.60*lt(log,5)",
+      "effects": [ { "op": "add", "stat": "log", "expr": "1 + has_axe" } ] },
+
+    { "on": "crafter", "name": "quarry stone",
+      "score": "0.62*lt(stone,6)",
+      "effects": [ { "op": "add", "stat": "stone", "expr": "1 + has_pickaxe" } ] },
+
+    { "on": "crafter", "name": "gather fiber",
+      "score": "0.64*lt(fiber,2)",
+      "effects": [ { "op": "add", "stat": "fiber", "expr": "1" } ] },
+
+    { "on": "crafter", "name": "dig ore",
+      "score": "lt(ore,5)*(0.35 + 0.95*has_furnace + 0.90*has_pickaxe)",
+      "effects": [ { "op": "add", "stat": "ore", "expr": "1 + 2*has_pickaxe" } ] },
+
+    { "_craft_note": "CRAFTING — each recipe consumes inputs (negative add) and yields an output; gated by ge(input,cost). Tool recipes are one-shot: lt(has_x,0.5) so they fire once, and set the flag. Higher tiers score higher, so a crafter always climbs to the most advanced thing it can currently afford.",
+      "on": "crafter", "name": "saw planks",
+      "score": "1.2*gt(log,2.5)*lt(plank,6)",
+      "effects": [ { "op": "add", "stat": "log", "expr": "-2" }, { "op": "add", "stat": "plank", "expr": "1" } ] },
+
+    { "on": "crafter", "name": "forge axe",
+      "score": "3.0*ge(plank,3)*ge(fiber,1)*lt(has_axe,0.5)",
+      "effects": [
+        { "op": "add", "stat": "plank", "expr": "-3" },
+        { "op": "add", "stat": "fiber", "expr": "-1" },
+        { "op": "set", "stat": "has_axe", "expr": "1" }
+      ] },
+
+    { "on": "crafter", "name": "raise furnace",
+      "score": "3.2*ge(stone,4)*ge(plank,2)*lt(has_furnace,0.5)",
+      "effects": [
+        { "op": "add", "stat": "stone", "expr": "-4" },
+        { "op": "add", "stat": "plank", "expr": "-2" },
+        { "op": "set", "stat": "has_furnace", "expr": "1" }
+      ] },
+
+    { "on": "crafter", "name": "smelt ingot",
+      "score": "2.0*has_furnace*ge(ore,2)*ge(log,1)*lt(ingot,7)",
+      "effects": [
+        { "op": "add", "stat": "ore", "expr": "-2" },
+        { "op": "add", "stat": "log", "expr": "-1" },
+        { "op": "add", "stat": "ingot", "expr": "1" }
+      ] },
+
+    { "on": "crafter", "name": "forge pickaxe",
+      "score": "3.6*ge(ingot,2)*ge(plank,1)*lt(has_pickaxe,0.5)",
+      "effects": [
+        { "op": "add", "stat": "ingot", "expr": "-2" },
+        { "op": "add", "stat": "plank", "expr": "-1" },
+        { "op": "set", "stat": "has_pickaxe", "expr": "1" }
+      ] },
+
+    { "on": "crafter", "name": "machine gear",
+      "score": "1.8*ge(ingot,2)*has_pickaxe*lt(gear,4)",
+      "effects": [ { "op": "add", "stat": "ingot", "expr": "-2" }, { "op": "add", "stat": "gear", "expr": "1" } ] },
+
+    { "on": "crafter", "name": "assemble ENGINE",
+      "score": "6.0*ge(gear,3)*ge(plank,2)*ge(ingot,2)*lt(has_engine,0.5)",
+      "effects": [
+        { "op": "add", "stat": "gear", "expr": "-3" },
+        { "op": "add", "stat": "plank", "expr": "-2" },
+        { "op": "add", "stat": "ingot", "expr": "-2" },
+        { "op": "set", "stat": "has_engine", "expr": "1" }
+      ] },
+
+    { "on": "crafter", "name": "idle", "score": "0.1", "effects": [] }
+  ],
+
+  "events": [
+    { "on": "crafter", "when": "gt(has_axe,0.5)",     "label": "★ forged an axe — chopping doubles", "do": [] },
+    { "on": "crafter", "when": "gt(has_furnace,0.5)",  "label": "★ raised a furnace — smelting begins", "do": [] },
+    { "on": "crafter", "when": "gt(has_pickaxe,0.5)",  "label": "★ forged a pickaxe — the ore seam cracks open", "do": [] },
+    { "on": "crafter", "when": "gt(has_engine,0.5)",   "label": "★★ assembled the ENGINE — tech tree complete", "do": [] },
+    { "on": "workshop", "when": "ge(engines,4)",       "label": "the whole foundry is running engines", "do": [] }
+  ]
+}

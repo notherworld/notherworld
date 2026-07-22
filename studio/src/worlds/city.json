@@ -1,0 +1,249 @@
+{
+  "_note": "VERANHOLM — a living city dived through the scope tree, rendered top-down at every scale. city > district > block > building > floor > room > occupant. LAZY: each level materializes on reveal (walk into any building). Building TYPE is real data (use_roll → doctor/shop/residential/school/cafe/office in the renderer). Occupants MOVE between rooms: each floor chains its rooms with a `door` edge, and occupants `move` along it + mingle with whoever is co-located. Nothing exists until observed; folds back when you leave.",
+
+  "rng_seed": 20,
+
+  "_fields_note": "LAYERED WORLD as composed fields (region algebra). elevation = noise + a bay. water/land are boolean complements. buildable = land MINUS steep. coast = land near water. Districts are gated to `buildable`. Swap any formula for ANY world — the engine composes regions, it never knows what they MEAN.",
+  "fields": {
+    "elevation": "clamp(noise(fx,fy)*0.6 + 0.35 - 0.7*sqrt((fx-0.95)*(fx-0.95)+(fy-0.9)*(fy-0.9))*lt(sqrt((fx-0.95)*(fx-0.95)+(fy-0.9)*(fy-0.9)),0.55), 0, 1)",
+    "water":     "lt(field(elevation,fx,fy), 0.4)",
+    "land":      "not(field(water,fx,fy))",
+    "steep":     "gt(abs(field(elevation,fx+0.03,fy)-field(elevation,fx-0.03,fy)) + abs(field(elevation,fx,fy+0.03)-field(elevation,fx,fy-0.03)), 0.12)",
+    "shore":     "and(field(land,fx,fy), near(water, 0.05))",
+    "beach":     "and(field(shore,fx,fy), not(field(steep,fx,fy)))",
+    "cliff":     "and(field(shore,fx,fy), field(steep,fx,fy))",
+    "buildable": "sub(field(land,fx,fy), field(steep,fx,fy))",
+    "steeper":         "gt(abs(field(elevation,fx+0.015,fy)-field(elevation,fx-0.015,fy)) + abs(field(elevation,fx,fy+0.015)-field(elevation,fx,fy-0.015)), 0.08)",
+    "buildable_block": "sub(sub(field(buildable,fx,fy), near(water, 0.035)), field(steeper,fx,fy))",
+    "plot_land":       "sub(field(buildable_block,fx,fy), road_near(0.014))",
+    "near_road":       "road_near(0.03)"
+  },
+  "_plot_land_note": "ROADS vs PLOTS — this is SUBTRACTION, not fronting. `plot_land` = buildable_block MINUS a band around every road (`road_near`), so buildings simply can't overlap a lane; plots carve from what's left. This is the SUBURBAN/RURAL form (houses avoid the road, scatter on remaining land). The CITY form is different — there plots would FRONT the road (setback + a frontage row along the street, interior lots behind), which is a stronger 'plots orient to the road' rule NOT built yet. Both are authorable as data (the engine subtracts roads via road_near; fronting would be a future partition option that reads 'which road do I face'). Kept subtraction as the base on purpose — city vs suburb is a DEV's choice, not a baked-in law. road_near width (0.014) = the corridor half-tuning; widen for wider streets.",
+  "_buildable_block_note": "THE FINER RULE (scope decision, no engine change): building plots sit on a STRICTER mask than blocks do — `buildable_block` = buildable MINUS a coast setback (`near(water,0.035)`) MINUS a stricter local slope (`steeper`), so lots read as tight urban plots set back from the water, not 'anywhere on land'. Pure region algebra; sampled through the BLOCK's fractal patch, so the setback is measured against THIS block's real coastline at every seed — one formula, correct everywhere. Authoring MEANING; the engine only composes the regions. (NOTE: comment keys must live OUTSIDE `fields` — every key inside `fields` is parsed as a formula.)",
+
+  "_routes_note": "City districts are VORONOI (organic territory), so they need real terrain-aware ROADS routed between them (around water, bridging). Districts route LANES between blocks (the arteries passing through). But BUILDINGS are not routed: the block→building `street` route was REMOVED on purpose — it double-drew a road network buildings had to dodge. Inside a block, circulation is EMERGENT: plots carve from `plot_land` (buildable minus the through-lanes via `road_near`), and the GAPS between the subdivide plots ARE the local streets. Construction determines block roads, not a separate routing pass. Two directions of causality: ABOVE the block road→land (artery cuts buildable); INSIDE the block land→road (plots make streets).",
+  "routes": [
+    { "on": "city", "node": "district", "hub": "eq(ring,0)", "route": "road",
+      "x": "cx", "y": "cy", "style": "organic", "redundancy": 4,
+      "cost": "1 + 8*field(water, fx, fy) + 3*field(steep, fx, fy)",
+      "transition": "field(water, fx, fy)", "max_span": 0.3, "trans_kind": "bridge" },
+
+    { "_note": "FRACTAL CIRCULATION: `gates:true` includes the crossing points the CITY road left on this district (engine `gate` children) as lane nodes — so the lane web CONNECTS to the artery where it enters, instead of overlaying it blindly. The lanes are the ARTERIES that pass through blocks — they get subtracted from block plot_land (a building can't sit on a lane).",
+      "on": "district", "node": "block", "hub": "busy", "route": "lane",
+      "x": "bx", "y": "by", "style": "organic", "redundancy": 3,
+      "cost": "1 + 8*field(water, fx, fy)", "gates": true }
+  ],
+
+  "_templates_note": "THE TEMPLATE LAYER — captured compositions, not new machinery. A template is a generator FRAGMENT deep-merged under any generator that names it (the generator's own keys win; nested objects merge). The loader expands it before the engine ever looks; the engine only sees prims. `carved_lots` = the proven 'tile the buildable land honestly' recipe (mask-aware subdivide carve, clipped to the coast) — EXTRACTED from the block and building generators below, which now share it. A dev could define `alien_hive` the same way; nothing here knows what a lot is.",
+  "templates": {
+    "carved_lots": {
+      "partition": { "style": "subdivide", "clip": "field(buildable, fx, fy)" }
+    },
+    "_carved_urban_lots_note": "SAME carve recipe, STRICTER land: building plots tile `buildable_block` (buildable minus a coast setback minus steeper slope) instead of raw buildable — so buildings sit on tight urban lots set back from the water. Only the clip field differs; the machinery is identical. A dev picks the mask, the engine carves it.",
+    "carved_urban_lots": {
+      "partition": { "style": "subdivide", "clip": "field(buildable_block, fx, fy)" }
+    },
+    "_carved_plot_lots_note": "THE ROAD/PLOT RECONCILIATION (founder: 'how can you plop a building OVER a road?'). Building plots carve from `plot_land` = buildable_block MINUS the district ARTERIES running through the block (`road_near`). The through-roads are cut OUT of the land, so nothing builds on them; the GAPS between the remaining subdivide plots ARE the local streets (construction determines block roads — no separately-routed block street network, that double-drew roads fighting the plots). Two directions of causality: ABOVE the block road→land (artery cuts buildable); INSIDE the block land→road (plots make streets).",
+    "carved_plot_lots": {
+      "partition": { "style": "subdivide", "clip": "field(plot_land, fx, fy)" }
+    }
+  },
+
+  "seed": [
+    { "kind": "city", "name": "Veranholm", "reveal": true,
+      "stats": { "heat": 0.2, "wealth": 0.5, "hour": 8 } }
+  ],
+
+  "generators": [
+    { "on": "city", "spawn": "district", "count": "7",
+      "partition": { "style": "voronoi", "edge": "border", "x": "cx", "y": "cy",
+        "where": "field(buildable, fx, fy)", "clip": "field(buildable, fx, fy)",
+        "coverage": {
+          "beach": "field(beach, fx, fy)",
+          "cliff": "field(cliff, fx, fy)",
+          "shore": "field(shore, fx, fy)",
+          "hill":  "gt(field(elevation, fx, fy), 0.68)"
+        } },
+      "_child_stats_note": "child_stats evaluate TOP-TO-BOTTOM against the child, so later formulas read earlier stats by name (angle/radius/spread → cx/cy → elev). No repeated sub-expressions.",
+      "child_stats": {
+        "angle":     "index * 2 * pi() / 7 + 0.18*rand(9)",
+        "ring":      "iff(eq(index,0), 0, 1)",
+        "radius":    "iff(eq(index,0), 0, 0.82 + 0.12*rand(1))",
+        "spread":    "0.62 + 0.14*rand(1)",
+        "cx":        "0.5 + radius * cos(angle) * 0.5",
+        "cy":        "0.5 + radius * sin(angle) * 0.5",
+        "density":   "iff(eq(index,0), 0.95, clamp(0.75 - 0.5*spread + 0.15*rand(2), 0.15, 1))",
+        "heat":      "iff(eq(index,0), 0.7 + 0.2*rand(3), clamp(0.5 - 0.4*spread + 0.2*rand(3), 0.05, 0.9))",
+        "wealth":    "clamp(0.25 + 0.55*spread + 0.15*(rand(4)-0.5), 0.1, 0.95)",
+        "character": "rand(5)",
+        "elev":      "field(elevation, cx, cy)"
+      }
+    },
+
+    { "on": "district", "spawn": "block", "count": "4 + density*4",
+      "_treatment": "THE CITY TREATMENT (the missing middle level): a district partitions into BLOCKS that HONESTLY tile its buildable land — Voronoi seeds scattered ON the land (`where`), cells clipped to the coast (`clip`), same recipe as districts. Contiguous land-following parcels, no overlap. Local STREETS route between them. A district is a small city.",
+      "template": "carved_lots",
+      "partition": { "edge": "adjacent", "x": "bx", "y": "by", "weight": "parcel" },
+      "child_stats": {
+        "parcel":   "1 + floor(rand(6)*rand(6)*5)",
+        "wealth":   "parent.wealth + 0.15*(rand(1)-0.5)",
+        "mix":      "clamp(0.5 + 0.5*parent.hill_frac - 0.7*parent.shore_frac + 0.2*(rand(2)-0.5), 0, 1)",
+        "busy":     "clamp(0.3 + 0.4*parent.shore_frac + 0.3*parent.heat + 0.3*rand(3), 0, 1)"
+      }
+    },
+
+    { "on": "block", "spawn": "building", "count": "clamp(floor(1 + area*65 + busy*2), 1, 14)",
+      "_count_note": "BUILDING COUNT ∝ the block's real LAND (`area` = carved buildable fraction). Because the carve splits the land among exactly `count` lots, fewer count = BIGGER lots — so this is ALSO the min-lot-size lever (founder: 'improve min size'). area*65: a sliver block (area~0.02) → ~2 big buildings, a roomy block (area~0.1) → ~8. + a small busy nudge. Clamped 1..14. Raise the 65 for finer grain / more smaller lots, lower it for fewer bigger lots.",
+      "_treatment": "THE CITY TREATMENT, ONE SCALE DOWN: buildings are PLOTS that honestly tile the block's PLOT land (`carved_plot_lots` clips to `plot_land` = buildable_block minus the district arteries running through — so buildings never sit on a road, and the gaps between plots ARE the local streets). Same partition prim as districts — a block is a smaller city, resolved through its own world patch automatically. The carve writes each plot's real land fraction to `area` (see the `footprint` rule below — building SIZE ⊕ its honest lot).",
+      "template": "carved_plot_lots",
+      "partition": { "edge": "abut", "x": "px", "y": "py", "weight": "prominence" },
+      "child_stats": {
+        "prominence":"1 + floor(rand(6)*rand(6)*7)",
+        "floors":    "1 + rand(1)*rand(1)*7",
+        "wealth":    "parent.wealth + 0.15*(rand(2)-0.5)",
+        "use_roll":  "iff(lt(parent.mix,0.4), 0.7 + 0.3*rand(3), rand(4))",
+        "occupancy": "0.4 + 0.5*rand(5)"
+      }
+    },
+
+    { "on": "building", "spawn": "floor", "count": "max(1, floors)",
+      "child_stats": {
+        "level":     "index",
+        "wealth":    "parent.wealth",
+        "use_roll":  "parent.use_roll",
+        "public":    "lt(index,0.5)"
+      }
+    },
+
+    { "on": "floor", "spawn": "room", "count": "3 + wealth*3", "chain": "door",
+      "child_stats": {
+        "size":      "0.4 + 0.5*rand(1)",
+        "warmth":    "0.3 + 0.5*rand(2)",
+        "use_roll":  "parent.use_roll",
+        "occupied":  "chance(0.75)"
+      }
+    },
+
+    { "on": "room", "spawn": "occupant", "count": "occupied",
+      "child_stats": {
+        "mood":     "0.4 + 0.4*rand(1)",
+        "energy":   "0.4 + 0.5*rand(2)",
+        "sociable": "0.2 + 0.7*rand(3)",
+        "restless": "0.2 + 0.6*rand(4)"
+      }
+    }
+  ],
+
+  "coarse_rules": [
+    { "on": "district", "set": "heat",
+      "expr": "clamp(heat + 0.012*(edge_mean(border, heat) - heat), 0, 1)" }
+  ],
+
+  "rules": [
+    { "on": "district", "set": "heat",
+      "expr": "clamp(heat + 0.012*(edge_mean(border, heat) - heat), 0, 1)" },
+    { "on": "occupant", "set": "mood",
+      "expr": "clamp(mood + 0.015*gt(energy,0.4) - 0.02*lt(energy,0.2) + 0.02*gt(here_count(),0)*sociable, 0, 1)" },
+    { "on": "occupant", "set": "energy",
+      "expr": "clamp(energy - 0.015 + 0.06*lt(energy,0.3), 0, 1)" },
+
+    { "on": "building", "set": "souls", "expr": "child_sum(souls) + child_count()" },
+    { "on": "district", "set": "life",  "expr": "child_count()" }
+  ],
+
+  "_settle_note": "★ WORLDGEN, NOT SIM — the founder's crucial correction: 'saturation determines things BEFORE we look at the zoom level, not during.' Land use + zoning saturation + footprint are DECIDED ONCE, when a scope is first observed (reveal), iterated to convergence, then FROZEN to canon. They live in `settle_rules` (run at reveal), NOT `rules` (run every tick) — so buildings can NEVER bounce as the sim runs, because nothing recomputes them after reveal. This is the double-slit / lazy-canon: observation crystallizes the possibility into a fixed fact. Because blocks reveal lazily (on dive), each building's use is fixed when its block is revealed, and its civic count flows UP to the district (settle_ancestors) so a later-dived block sees the district already saturated — cross-block scarcity accumulates as you explore. No hysteresis / confirmation-counter needed anymore: settle converges once, cleanly, then never runs again.",
+  "settle_rules": [
+    { "_capacity_note": "★ LOT SIZE → CAPACITY (founder: 'couldn't we make lot size determine building capacity/availability just as easily?'). Lots come first (count ∝ block area, so they emerge from the LAND); then each lot's SIZE decides what it holds. `capacity` = how much this lot supports: a min-area GATE (area < ~0.004 → capacity 0 = EMPTY, a yard/pocket, NO building drawn — this is 'min size' as a real gate, not a crammed sliver), then rising with area. Everything downstream (does it build, footprint, split) reads capacity. THE model: the land decides, not a count formula.",
+      "on": "building", "set": "capacity",
+      "expr": "iff(lt(area,0.004), 0, clamp(0.3 + area*18, 0.3, 3))" },
+    { "_built_note": "does this lot BUILD at all? capacity 0 (too-small lot) → 0 = empty yard. The renderer draws nothing for built=0 (just the lot/ground shows).",
+      "on": "building", "set": "built", "expr": "gt(capacity,0)" },
+
+    { "_footprint_note": "BUILDING SIZE ⊕ ITS HONEST LOT — from the lot's `area` (sqrt so small lots still read, capped). Worldgen: fixed when observed. Only matters if built.",
+      "on": "building", "set": "footprint",
+      "expr": "clamp(0.35 + 0.9*sqrt(clamp(area,0,1)), 0.35, 0.95)" },
+
+    { "_situation_note": "PLOT SITUATION — road_access = is this plot near a lane (sampled at its world centre via near_road). Fixed at reveal; the use scores below read it.",
+      "on": "building", "set": "road_access",
+      "expr": "field(near_road, (wx0+wx1)/2, (wy0+wy1)/2)" },
+
+    { "_use_pref_note": "USE BY PREFERENCE (founder's 'a shop wants X, a hospital wants big+highway'). Each use SCORES the plot over its situation with a MIN-AREA GATE (ge(area,k)→0 below the size it needs). Highest score claims the plot (argmax below). Resi = strong default baseline (city is mostly homes); the others must earn their niche. Indices: 0 resi 1 shop 2 café 3 clinic 4 school 5 office. Civic scores subtract the DISTRICT saturation (parent.*_sat) — the scarcity feedback, now converging DURING settle (settle iterates rules+rollups so the count→saturation→suppression loop settles before freezing). No hysteresis term needed — settle isn't a per-tick loop, so there's nothing to flicker.",
+      "on": "building", "set": "s_resi",
+      "expr": "ge(area,0.006)*(1.15 + 0.6*area + 0.4*wealth)" },
+    { "on": "building", "set": "s_shop",
+      "expr": "ge(area,0.004)*(0.6 + 0.9*road_access + 0.5*parent.busy + 0.5*(1-parent.mix))" },
+    { "on": "building", "set": "s_cafe",
+      "expr": "ge(area,0.003)*(0.45 + 0.7*road_access + 0.8*parent.busy)" },
+    { "_clinic_note": "clinic NICHE = road-accessible, wealthy, MID-size (oversize penalty sends big lots to office/school). `- 0.85*parent.clinic_sat` = the district scarcity feedback.",
+      "on": "building", "set": "s_clinic",
+      "expr": "ge(area,0.02)*(0.95 + 1.1*road_access + 0.6*wealth - 4*max(area-0.05,0)) - 0.85*parent.clinic_sat" },
+    { "on": "building", "set": "s_school",
+      "expr": "ge(area,0.04)*(0.6 + 3.0*area + 0.6*parent.mix + 0.5*(1-road_access)) - 0.85*parent.school_sat" },
+    { "on": "building", "set": "s_office",
+      "expr": "ge(area,0.035)*(0.55 + 1.0*road_access + 0.7*wealth + 0.5*parent.busy) - 0.6*parent.office_sat" },
+    { "on": "building", "set": "use_best",
+      "expr": "max(max(max(s_resi,s_shop),max(s_cafe,s_clinic)),max(s_school,s_office))" },
+    { "_use_argmax_note": "argmax → the committed use, written ONCE at settle and frozen. No candidate/confirmation dance — settle converges then stops, so `use` is canon.",
+      "on": "building", "set": "use",
+      "expr": "iff(ge(s_resi,use_best-0.0001),0, iff(ge(s_shop,use_best-0.0001),1, iff(ge(s_cafe,use_best-0.0001),2, iff(ge(s_clinic,use_best-0.0001),3, iff(ge(s_school,use_best-0.0001),4, 5)))))" },
+
+    { "_flags_note": "presence flags → rolled up (building→block→district) so the district saturation counts them. Run in settle so the count feeds back DURING crystallization.",
+      "on": "building", "set": "is_clinic", "expr": "eq(use,3)" },
+    { "on": "building", "set": "is_school", "expr": "eq(use,4)" },
+    { "on": "building", "set": "is_office", "expr": "eq(use,5)" },
+
+    { "_fill_note": "★ ROOFTOP FILL — how much of its LOT a building's roof covers, DECIDED FROM MEANING (founder: 'some fill to the brim, some don't; a rich person keeps most of it yard'). WEALTH lowers fill (the rich keep lawn/setback); BUSY raises it (dense commercial fills the brim); USE matters — shops/offices/clinic pack their lots (0.9+), apartments moderate, schools sit in grounds (low fill, big yard). area nudges (a huge lot keeps proportionally more open). All authorable: change the formula to change the city's grain. 0.3..0.95 of the carved lot shape. This is worldgen (settle), frozen.",
+      "on": "building", "set": "fill",
+      "expr": "clamp( (0.62 + 0.35*parent.busy - 0.45*wealth - 0.5*max(area-0.06,0)) + 0.28*eq(use,1) + 0.22*eq(use,5) + 0.2*eq(use,3) - 0.28*eq(use,4) - 0.06*eq(use,0), 0.3, 0.95 )" },
+
+    { "_split_note": "★ LOT SPLIT — a big lot can hold MORE THAN ONE building (founder: 'some might split a lot to 2 buildings'). split = how many footprints on this lot: big + dense residential/mixed splits into 2 (a duplex / two houses on a wide lot); very big → 3; small or single-purpose (civic, shops) stays 1. The renderer draws `split` footprints across the lot. Meaning-driven: raise the area gates for a coarser grain, add uses that subdivide.",
+      "on": "building", "set": "split",
+      "expr": "clamp(1 + ge(area,0.05)*(eq(use,0)+eq(use,5)) + ge(area,0.11)*eq(use,0), 1, 3)" },
+
+    { "_recipe_note": "★ SCALE-SEEDED SCARCITY (reusable recipe): 'a scarce thing suppresses MORE of itself at the scale above.' clinics per district = legendary loot per dungeon = one blacksmith per town. Presence flag → rollup count up the tree → ancestor → saturation → suppress. Now settled at WORLDGEN time (once, at reveal), not per-tick — so it can't bounce. Because settle iterates rules+rollups to convergence, the saturation is a plain clamped target (no damping needed — there's no per-tick oscillation when it converges once and freezes).",
+      "on": "district", "set": "clinic_sat", "expr": "clamp(0.5*clinic_total, 0, 1.6)" },
+    { "on": "district", "set": "school_sat", "expr": "clamp(0.55*school_total, 0, 1.6)" },
+    { "on": "district", "set": "office_sat", "expr": "clamp(0.26*office_total, 0, 1.4)" },
+
+    { "_sat_down_note": "SATURATION FLOWS DOWN one level per rule (block reads its district; buildings read their block via parent.*_sat in the scores). Each is the sole writer on its kind → no clobber. In settle these run top-down each pass, so the district's saturation reaches buildings within the convergence.",
+      "on": "block", "set": "clinic_sat", "expr": "parent.clinic_sat" },
+    { "on": "block", "set": "school_sat", "expr": "parent.school_sat" },
+    { "on": "block", "set": "office_sat", "expr": "parent.office_sat" }
+  ],
+
+  "rollups": [
+    { "_note": "COUNT the civic uses up the scale tree, building → block → district. Two hops: buildings sum into their block, blocks sum into their district. `sum` reducer. The district's *_total is the whole-district civic count that drives the saturation (feedback) above.",
+      "parent": "block",    "child_stat": "is_clinic",   "parent_stat": "clinic_n",     "reduce": "sum" },
+    { "parent": "block",    "child_stat": "is_school",   "parent_stat": "school_n",     "reduce": "sum" },
+    { "parent": "block",    "child_stat": "is_office",   "parent_stat": "office_n",     "reduce": "sum" },
+    { "parent": "district", "child_stat": "clinic_n",    "parent_stat": "clinic_total", "reduce": "sum" },
+    { "parent": "district", "child_stat": "school_n",    "parent_stat": "school_total", "reduce": "sum" },
+    { "parent": "district", "child_stat": "office_n",    "parent_stat": "office_total", "reduce": "sum" }
+  ],
+
+  "_broadcast_removed_note": "We do NOT broadcast the saturation. A broadcast fires at EVERY parent→child pair unconditionally, so it clobbers (city→district would zero the district's computed value; a second broadcast level re-clobbers). Instead the saturation flows down via single-level `parent.X` RULES (below): a block copies its district's clinic_sat, a building reads its block's — each rule is the sole writer of that stat on that kind, so no clobber. Cleaner than broadcast for a computed value that must survive. RECIPE NOTE: to push a COMPUTED scope stat downward, prefer a `set X = parent.X` rule per level over a broadcast.",
+
+  "actions": [
+    { "on": "occupant", "name": "wander_next_room",
+      "score": "restless*gt(energy,0.35)*0.7",
+      "effects": [ { "op": "move", "stat": "door" } ]
+    },
+    { "on": "occupant", "name": "mingle",
+      "score": "sociable*gt(here_count(),0)*gt(energy,0.4)*0.8",
+      "effects": [ { "op": "affect", "stat": "co:mood", "expr": "0.02*sociable" } ]
+    },
+    { "on": "occupant", "name": "rest",
+      "score": "lt(energy,0.4)*1.0",
+      "effects": [ { "op": "add", "stat": "energy", "expr": "0.1" } ]
+    },
+    { "on": "occupant", "name": "idle",
+      "score": "0.3",
+      "effects": [ { "op": "add", "stat": "mood", "expr": "0.004" } ]
+    }
+  ],
+
+  "events": [
+    { "on": "occupant", "when": "gt(mood,0.9)*lt(content,0.5)",
+      "label": "settled in, content", "do": [ { "op": "set", "stat": "content", "expr": "1" } ] }
+  ]
+}

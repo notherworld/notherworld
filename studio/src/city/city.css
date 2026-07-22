@@ -1,0 +1,283 @@
+/* Veranholm — a living city dive. Cute/game-y, top-down, animated camera dive. */
+* { box-sizing: border-box; }
+:root {
+  --bg: #0e1220; --panel: #151b2e; --ink: #e8eefc; --muted: #8595b5;
+  --line: #283351; --gold: #e8c06a; --accent: #79b0ff;
+  --block: #46527a; --floor: #3a4568; --room-line: #566089;
+}
+html, body, #city { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink);
+  font: 14px/1.5 ui-rounded, "Segoe UI", system-ui, -apple-system, sans-serif; }
+
+.cx-root { display: flex; flex-direction: column; height: 100vh; }
+.city-load, .city-err { padding: 40px; color: var(--muted); }
+
+/* top bar */
+.cx-bar { display: flex; align-items: baseline; gap: 12px; padding: 10px 18px;
+  background: #171e33; border-bottom: 1px solid var(--line); }
+.cx-brand { font-weight: 800; letter-spacing: 1px; }
+.cx-tag { color: var(--muted); font-size: 12px; }
+.cx-sp { flex: 1; }
+.cx-btn { background: #212c48; color: var(--ink); border: 1px solid var(--line);
+  border-radius: 8px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+.cx-btn:hover { border-color: var(--accent); }
+.cx-btn.hot { background: #2b3a5e; color: #ffe08a; border-color: #e8c06a55; font-weight: 700; }
+.cx-btn.hot:hover { border-color: var(--gold); }
+.cx-tick { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* breadcrumb trail */
+.cx-trail { display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
+  padding: 7px 18px; background: #10152a; border-bottom: 1px solid var(--line); }
+.cx-crumb { background: none; border: none; color: var(--muted); cursor: pointer;
+  padding: 3px 7px; border-radius: 6px; font-size: 13px; }
+.cx-crumb em { font-style: normal; opacity: 0.55; font-size: 10px; margin-left: 4px; text-transform: uppercase; }
+.cx-crumb:hover { color: var(--ink); background: #1a2340; }
+.cx-crumb.on { color: var(--ink); font-weight: 700; }
+.cx-sep { color: var(--line); }
+.cx-out { margin-left: auto; background: #212c48; color: var(--accent);
+  border: 1px solid var(--line); border-radius: 7px; padding: 4px 11px; cursor: pointer; font-size: 12px; }
+.cx-out:hover { border-color: var(--accent); }
+
+/* body: stage + inspector */
+.cx-body { flex: 1; display: flex; min-height: 0; }
+.cx-stage-wrap { flex: 1; position: relative; padding: 22px; min-width: 0; display: flex; flex-direction: column; }
+.cx-stage { position: relative; flex: 1; border-radius: 16px; overflow: hidden;
+  background: #0b0f1c; border: 1px solid var(--line); }
+.cx-hint { padding: 10px 4px 0; color: var(--muted); font-size: 12px; }
+.cx-clickhint { color: var(--accent); }
+
+/* ground textures per level */
+.cx-ground { position: absolute; inset: 0; opacity: 0.5; pointer-events: none; }
+.cx-ground.city { background:
+  radial-gradient(circle at 30% 20%, #16305016, transparent 60%),
+  repeating-linear-gradient(0deg, #ffffff06 0 1px, transparent 1px 40px),
+  repeating-linear-gradient(90deg, #ffffff06 0 1px, transparent 1px 40px);
+  background-color: #12203a; }
+.cx-ground.district { background:
+  repeating-linear-gradient(45deg, #ffffff08 0 2px, transparent 2px 22px);
+  background-color: #14213c; }
+.cx-ground.block { background-color: #1a2136;
+  background-image: linear-gradient(90deg, #ffffff05 1px, transparent 1px),
+                    linear-gradient(0deg, #ffffff05 1px, transparent 1px);
+  background-size: 26px 26px; }
+.cx-ground.building { background-color: #12172a; }
+.cx-ground.floor { background-color: #171c30;
+  background-image: linear-gradient(#ffffff06 1px, transparent 1px),
+                    linear-gradient(90deg, #ffffff06 1px, transparent 1px);
+  background-size: 18px 18px; }
+
+/* a placed node (district/block/building/floor/room) */
+.cx-node { position: absolute; border-radius: 12px; cursor: pointer;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  padding: 6px; overflow: hidden; color: #0c1220;
+  border: 1px solid #ffffff22; box-shadow: 0 2px 8px #0006;
+  transition: transform 0.12s, box-shadow 0.12s, filter 0.12s; }
+.cx-node:hover { transform: translateY(-2px) scale(1.015); box-shadow: 0 6px 16px #0009; filter: brightness(1.08); z-index: 3; }
+.cx-node.sel { outline: 2px solid var(--gold); outline-offset: 1px; z-index: 4; }
+.cx-node.idea { opacity: 0.55; border-style: dashed; filter: saturate(0.5); }
+
+.cx-label { font-weight: 700; font-size: 13px; text-shadow: 0 1px 2px #fff4; }
+.cx-label.sm { font-size: 11px; }
+.cx-sub { font-size: 10px; opacity: 0.7; }
+.cx-idea { position: absolute; top: 5px; right: 7px; font-size: 9px; color: #0b1220cc; font-weight: 700; }
+.cx-enter { position: absolute; bottom: 5px; opacity: 0; background: #0c1220cc; color: #fff;
+  border: none; border-radius: 6px; padding: 2px 8px; font-size: 10px; cursor: pointer; transition: opacity 0.12s; }
+.cx-node:hover .cx-enter { opacity: 1; }
+
+/* building specifics */
+.cx-node.building { justify-content: flex-start; padding-top: 6px; }
+.cx-bglyph { font-size: 18px; line-height: 1; }
+.cx-windows { display: grid; gap: 2px; margin-top: 5px; width: 70%; }
+.cx-win { aspect-ratio: 1; background: #0c132088; border-radius: 1px; }
+.cx-win.lit { background: #ffdb8ad9; box-shadow: 0 0 3px #ffdb8a99; }
+
+/* floor slabs */
+.cx-node.floor { flex-direction: row; justify-content: flex-start; gap: 10px;
+  color: #dbe6ff; background: var(--floor); border-radius: 8px; padding-left: 16px; }
+.cx-flabel { font-weight: 700; font-size: 13px; }
+
+/* rooms (floorplan) */
+.cx-node.room { color: #e7edff; border: 1.5px solid var(--room-line); border-radius: 6px;
+  align-items: flex-start; justify-content: flex-start; padding: 6px 8px; box-shadow: inset 0 0 0 1px #0004; }
+.cx-rlabel { font-size: 10px; opacity: 0.75; font-weight: 600; }
+
+.floorplan .cx-stage { background: #10162a; }
+
+/* the occupant pawns — the transition on left/top is what makes them GLIDE */
+.cx-pawn { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px;
+  border-radius: 50%; border: 2px solid #ffffffcc; cursor: pointer; z-index: 6;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 6px #000a;
+  transition: left 0.5s cubic-bezier(0.4,0,0.3,1), top 0.5s cubic-bezier(0.4,0,0.3,1), background 0.6s; }
+.cx-pawn:hover { transform: scale(1.25); z-index: 7; }
+.cx-pawn.sel { outline: 2px solid var(--gold); outline-offset: 2px; }
+.cx-pawn-face { font-size: 12px; color: #0c1220; font-weight: 800; }
+.cx-pawn-act { position: absolute; top: -14px; font-size: 9px; color: #cdd8f2;
+  white-space: nowrap; background: #0c1220cc; padding: 0 4px; border-radius: 4px; }
+
+/* ---- the city MAP (svg, district level) ---- */
+.cx-mapwrap { position: relative; width: 100%; height: 100%; }
+.cx-map { width: 100%; height: 100%; display: block; background: #0a0e1a; }
+.cx-legend { position: absolute; left: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 12px;
+  max-width: 62%; padding: 8px 12px; background: #0c1220dd; border: 1px solid var(--line);
+  border-radius: 10px; font-size: 11px; color: #c3d0ee; }
+.cx-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.cx-legend .lg { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.lg.dist { background: linear-gradient(135deg,#7a5cff,#e0a458); }
+.lg.rug { background: #2a2e38; box-shadow: inset 0 0 0 3px #00000055; }
+.lg.beach { background: #c9b98a; }
+.lg.water { background: #2f7fc0; }
+.lg.road { background: repeating-linear-gradient(90deg,#e8d3a0 0 3px,transparent 3px 6px); }
+.lg.bridge { background: #d8b878; border: 1px solid #3a2a10; }
+.lg.river { background: #7ec8f0; border-radius: 6px; }
+
+/* contiguous Voronoi cells — light tint over the terrain (fill only; borders are a
+   separate crisp outline pass so the land reads through the translucent fill) */
+.cx-cell .cell-shape { stroke: none; transition: filter 0.15s; }
+.cx-outline { stroke: #0a0e1a; stroke-width: 2.5; }
+.cx-outline.dt { stroke: #fff2cc; stroke-width: 3.5; }
+.cx-outline.sel { stroke: var(--gold); stroke-width: 4.5; }
+.cx-cell.dt .cell-shape { stroke: #f0c67466; stroke-width: 3; }
+.cx-cell:hover .cell-shape { filter: brightness(1.14) drop-shadow(0 0 26px #79b0ff44); }
+.cx-cell.sel .cell-shape { stroke: var(--gold); stroke-width: 4; filter: brightness(1.1) drop-shadow(0 0 30px #e8c06a66); }
+.cx-cell.idea .cell-shape { filter: saturate(0.55) brightness(0.82); }
+
+/* the road network — engine-pathfound over land, around water, bridging crossings */
+.road-bed2 { stroke: #1a1206; stroke-width: 8; stroke-linecap: round; }
+.road-top { stroke: #e8d3a0; stroke-width: 3.5; stroke-linecap: round; stroke-dasharray: 1 7; opacity: 0.9; }
+.roads { filter: drop-shadow(0 1px 2px #0008); }
+/* a bridge SPAN — a bold planked structure carrying the road across water */
+.bridge-span { stroke: #caa76a; stroke-width: 7; stroke-linecap: butt; stroke-dasharray: 3 3; opacity: 0.95;
+  filter: drop-shadow(0 0 4px #0009); }
+.bridge-mark { fill: #f0d9a0; stroke: #3a2a10; stroke-width: 2; }
+.bridge-label { fill: #ffe9b8; font-size: 12px; font-weight: 700; paint-order: stroke; stroke: #000a; stroke-width: 3px; }
+
+/* the river — traced downhill through the engine's elevation field */
+.river-wide { fill:none; stroke:#3a7fb0; stroke-width:16; stroke-linecap:round; stroke-linejoin:round; opacity:0.5; filter:drop-shadow(0 0 6px #3a7fb088); }
+.river-core { fill:none; stroke:#7ec8f0; stroke-width:7; stroke-linecap:round; stroke-linejoin:round; opacity:0.85; }
+.terrain rect { shape-rendering:crispEdges; }
+
+/* seams = the engine's border edges, drawn as roads along the shared boundary */
+.seam { stroke: #ffd98a; stroke-width: 3; stroke-linecap: round; opacity: 0.32; }
+.seam.artery { stroke: #ffcf7a; stroke-width: 5; opacity: 0.5; }
+.cx-seams { filter: drop-shadow(0 0 4px #ffcf7a44); mix-blend-mode: screen; }
+
+.dist-name { fill: #f8fbff; font-size: 29px; font-weight: 800; paint-order: stroke; stroke: #000b; stroke-width: 5px; letter-spacing: 0.3px; }
+.dist-name.dt { fill: #ffe9b8; font-size: 34px; }
+.dist-sub { fill: #d3deff; font-size: 16px; font-style: italic; paint-order: stroke; stroke: #000b; stroke-width: 3.5px; }
+.dist-idea { fill: #a9c4ff; font-size: 15px; font-weight: 700; }
+.stip { fill: #8095bd; opacity: 0.42; }
+.stip.lit { fill: #ffdd93; opacity: 0.95; filter: drop-shadow(0 0 2px #ffdd93); }
+
+/* ---- the BLOCK map (subdivide plots + streets, city treatment one scale down) ---- */
+.bk-map { width: 100%; height: 100%; display: block; }
+.bk-ground { fill: #12182a; }
+.bk-pave { fill: #38405a; }  /* the street ground — shows in the GAPS between inset plots = the street grid; kept clearly LIGHTER than lot/void ground so streets read as streets */
+.bk-lot { fill: #1a2436; stroke: #ffffff10; stroke-width: 1; }  /* the lot ground / yard around a building */
+.bk-plot .bk-rect { stroke: #0a0e1a; stroke-width: 2; transition: filter 0.12s;
+  filter: drop-shadow(0 2px 4px #0008); }  /* footprint lifts off its lot */
+.bk-plot:hover .bk-rect, .bk-plot:hover .bk-region { filter: brightness(1.12) drop-shadow(0 0 14px #79b0ff55); }
+.bk-plot.sel .bk-rect { stroke: var(--gold); stroke-width: 3.5; filter: drop-shadow(0 0 16px #e8c06a77); }
+.bk-plot.sel .bk-region { filter: brightness(1.2) drop-shadow(0 0 16px #e8c06a99); }
+.bk-region { transition: filter 0.12s; }
+.bk-plot.idea .bk-region, .bk-plot.idea .bk-rect { stroke-dasharray: 5 4; }
+/* the HAZE — the next zoom level shimmering through this one */
+.bk-haze { fill: #0a0e1a66; stroke: #0a0e1a99; stroke-width: 1; }
+.bk-speck { fill: #e9edf7aa; }
+.bk-dive { fill: #9fc4ff; font-size: 15px; font-style: italic; }
+.bk-lane-bed { stroke: #0a0e1a; stroke-width: 7; stroke-linecap: round; opacity: 0.5; }
+/* ANCESTOR circulation projected into deeper views (spec T1): the city artery
+   keeps the city-map road look; district lanes are a quieter echo. */
+.bk-artery-bed { stroke: #2a2413; stroke-width: 13; stroke-linecap: round; opacity: 0.85; }
+.bk-artery-top { stroke: #e8d3a0; stroke-width: 6; stroke-linecap: round; stroke-dasharray: 10 7; }
+.bk-lane-bed2 { stroke: #0a0e1a; stroke-width: 8; stroke-linecap: round; opacity: 0.45; }
+.bk-gate { fill: #e8d3a0; stroke: #2a2413; stroke-width: 2; }  /* where the artery enters this scope — the local net's connection point */
+.bk-lane-top { stroke: #cfc3a4; stroke-width: 3.5; stroke-linecap: round; opacity: 0.55; }
+.bk-glyph { font-size: 26px; }
+.bk-use { fill: #10151f; font-size: 14px; font-weight: 700; }
+.bk-fl { fill: #10151f; font-size: 11px; opacity: 0.7; }
+.bk-win { fill: #0c132088; }
+.bk-win.lit { fill: #ffdb8ad0; }
+.bk-street { stroke: #cfc3a4; stroke-width: 4; stroke-linecap: round; opacity: 0.6; }
+.bk-streets { filter: drop-shadow(0 1px 1px #0007); }
+
+/* inspector */
+.cx-inspect { width: 288px; border-left: 1px solid var(--line); background: var(--panel);
+  padding: 16px; overflow: auto; flex-shrink: 0; }
+.cx-inspect h3 { margin: 0 0 2px; }
+.cx-muted { color: var(--muted); }
+.cx-fid.detailed { color: #7fdc9a; } .cx-fid.coarse { color: var(--muted); } .cx-fid.hazed { color: var(--gold); }
+.cx-doing { margin: 10px 0; font-size: 13px; }
+.cx-stats { margin-top: 12px; display: grid; gap: 6px; }
+.cx-stat { display: grid; grid-template-columns: 74px 1fr 34px; align-items: center; gap: 6px; font-size: 12px; }
+.cx-stat > span:first-child { color: var(--muted); }
+.cx-statbar { height: 6px; background: #0c1220; border-radius: 3px; overflow: hidden; }
+.cx-statbar > span { display: block; height: 100%; background: var(--accent); }
+.cx-stat b { text-align: right; font-variant-numeric: tabular-nums; }
+.cx-ih { margin: 14px 0 6px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+.cx-facts { margin: 0; padding-left: 15px; font-size: 12px; color: #cdd8f2; }
+
+/* chronicle */
+.cx-chron { border-top: 1px solid var(--line); background: #10152a; padding: 8px 18px;
+  display: flex; gap: 22px; overflow: hidden; font-size: 12px; white-space: nowrap; }
+.cx-chronitem { color: #c3d0ee; }
+.cx-chronitem b { color: var(--accent); margin-right: 5px; }
+
+/* ── INNER-LEVEL PASS: the outer trends carried down ────────────────────── */
+
+/* the building cutaway's vertical circulation: a stair/elevator core spine */
+.cx-core { position: absolute; right: 5%; top: 4%; bottom: 4%; width: 4.5%;
+  background: #10152699; border: 1px solid; border-color: #3a415288; border-radius: 6px;
+  display: flex; flex-direction: column; justify-content: space-evenly; align-items: center;
+  z-index: 2; pointer-events: none; opacity: 0.9; }
+.cx-core-step { width: 62%; height: 2px; background: #55607a; border-radius: 1px; }
+
+/* floor slab: use-color accent edge + a window strip along the slab */
+.cx-node.floor { border-left: 4px solid var(--use, #7ba5d8); }
+.cx-floorwins { position: absolute; right: 12%; top: 50%; transform: translateY(-50%);
+  display: flex; gap: 4px; width: 46%; }
+.cx-floorwins .cx-win { flex: 1; aspect-ratio: auto; height: 14px; border-radius: 2px; }
+.cx-entrance { position: absolute; left: 46%; bottom: 0; width: 26px; height: 9px;
+  background: #ffdb8a33; border: 1px solid #ffdb8a77; border-bottom: none;
+  border-radius: 4px 4px 0 0; }
+
+/* the floorplan corridor + runner (interior streets) */
+.cx-corridor { position: absolute; background: #1b2138; border-radius: 4px;
+  box-shadow: inset 0 0 0 1px #ffffff0d; pointer-events: none; }
+.cx-runner { position: absolute; left: 2%; right: 2%; top: 38%; bottom: 38%;
+  background: #262e4a; border-radius: 3px; opacity: 0.8; }
+
+/* doors: the engine's door edges — wall gaps + a faint corridor path */
+.cx-doors { position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 3; }
+.cx-doorpath { stroke: #8fa1c866; stroke-width: 0.35; stroke-dasharray: 1 1.2; fill: none; }
+.cx-doorgap { stroke: #10162a; stroke-width: 1.1; }
+.cx-doorswing { stroke: #ffdb8a99; stroke-width: 0.35; }
+
+/* the room interior — the deepest dive is a place */
+.cx-roominner { position: absolute; inset: 4%;
+  background: color-mix(in srgb, #232941, #4a3b2e calc(var(--warm, 0.5) * 40%));
+  border: 3px solid #3c445c; border-radius: 10px;
+  box-shadow: inset 0 0 0 2px #0006, inset 0 0 60px #0007; overflow: hidden; }
+.cx-rug { position: absolute; left: 28%; top: 34%; width: 44%; height: 36%;
+  background: repeating-linear-gradient(45deg, #6b5a7a44 0 8px, #55486644 8px 16px);
+  border-radius: 10px; border: 1px solid #ffffff14; }
+.cx-roomtag { position: absolute; top: 8px; left: 12px; font-size: 12px; letter-spacing: 0.08em;
+  color: #aeb9d8; opacity: 0.8; font-weight: 700; text-transform: uppercase; }
+.cx-furn { position: absolute; border-radius: 3px; border: 1px solid #0007;
+  box-shadow: 0 2px 5px #0007, inset 0 1px 0 #ffffff22; }
+.cx-furn.bed { background: linear-gradient(#d8dcea, #b9c1d8 45%, #7d89ad 45%); border-radius: 5px; }
+.cx-furn.sofa { background: #7a6a8f; border-radius: 6px 6px 3px 3px;
+  box-shadow: inset 0 -4px 0 #0004, 0 2px 5px #0007; }
+.cx-furn.table { background: #8a6f52; border-radius: 50%; }
+.cx-furn.desk { background: #6f5a42; }
+.cx-furn.counter { background: #566079; }
+.cx-furn.stove { background: #3a3f4a; box-shadow: inset 0 0 0 2px #0006, 0 2px 5px #0007; }
+.cx-furn.shelf { background: #5c4a38; box-shadow: inset 0 2px 0 #0005, inset 0 -2px 0 #0005, 0 2px 5px #0007; }
+.cx-furn.plant { background: radial-gradient(circle at 50% 35%, #6fae6f, #3d6b42); border-radius: 50%; }
+.cx-furn.tub { background: #dfe6f2; border-radius: 10px; }
+.cx-furn.sink { background: #c9d2e4; border-radius: 4px; }
+.cx-furn.crate { background: #8a744f; }
+.cx-furn.cabinet { background: #7b8499; }
+.cx-furn.board { background: #2e4638; box-shadow: inset 0 0 0 2px #d8dcea33, 0 2px 5px #0007; }
+.cx-pawn.big { width: 30px; height: 30px; margin: -15px 0 0 -15px; z-index: 8; }

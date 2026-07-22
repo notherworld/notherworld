@@ -1,0 +1,15 @@
+{
+  "_note": "A churning society that EXERCISES the new interaction prims at scale. Agents reach out and change each other: link a friend/rival (Link), brawl to drain a rival's hp (Interact), share coin with friends (Interact). Deaths despawn. Built to be cranked until something breaks.",
+  "actions": [
+    { "on": "agent", "name": "befriend",   "score": "lt(edge_count(friend),5)*(0.30 + sociability*0.4)", "effects": [ {"op":"link","stat":"friend:agent"} ] },
+    { "on": "agent", "name": "make_rival",  "score": "lt(edge_count(rival),4)*(0.20 + aggression*0.4)",  "effects": [ {"op":"link","stat":"rival:agent"} ] },
+    { "on": "agent", "name": "brawl",       "score": "gt(edge_count(rival),0)*aggression*0.7",           "effects": [ {"op":"affect","stat":"rival:hp","expr":"-max(0.14*strength - target.defense, 0.01)"} ] },
+    { "on": "agent", "name": "mend",        "score": "gt(edge_count(friend),0)*sociability*0.45",        "effects": [ {"op":"affect","stat":"friend:hp","expr":"gt(0.5,target.hp)*0.12"} ] },
+    { "on": "agent", "name": "share",       "score": "gt(edge_count(friend),0)*sociability*0.3",         "effects": [ {"op":"affect","stat":"friend:coin","expr":"0.5"} ] },
+    { "on": "agent", "name": "heal",        "score": "lt(hp,0.35)*0.9",                                  "effects": [ {"op":"add","stat":"hp","expr":"0.15"} ] },
+    { "on": "agent", "name": "earn",        "score": "0.15",                                             "effects": [ {"op":"add","stat":"coin","expr":"1"} ] }
+  ],
+  "events": [
+    { "on": "agent", "when": "lt(hp,0.02)", "label": "died in a brawl", "do": [ {"op":"despawn"} ] }
+  ]
+}

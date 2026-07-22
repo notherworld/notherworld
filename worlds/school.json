@@ -1,0 +1,14 @@
+{
+  "schools": [
+    { "name": "Northside Academy", "funding": 0.80, "population": 175 },
+    { "name": "Dockside School",   "funding": 0.20, "population": 95 }
+  ],
+  "rules": [
+    { "on": "classroom", "set": "richness", "expr": "max(parent.funding, child_max(wealth))" }
+  ],
+  "generators": [
+    { "on": "school",    "spawn": "classroom", "count": "clamp(population/30, 1, 8)", "child_stats": {} },
+    { "on": "classroom", "spawn": "teacher",   "count": "1",
+      "child_stats": { "wealth": "iff(chance(0.25), 0.92, 0.25 + rand()*0.15)" } }
+  ]
+}

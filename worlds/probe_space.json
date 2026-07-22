@@ -1,0 +1,38 @@
+{
+  "_note": "SPATIAL PROOF: topological space, pure data. A building of 4 rooms wired into a corridor by `door` edges (generator chain). A courier starts in room 1 (spawned only there via count eq(index,0)), carries mail, and walks room->room through doors, dropping mail to WHOEVER is co-located (affect co:). Residents live one-per-room. Success: courier's parent changes over time (it relocates), and residents' mail rises only when the courier is in their room. Exercises: chain (route graph), move-through-parent-door, here_/co: co-location.",
+  "rng_seed": 6,
+  "seed": [
+    { "kind": "building", "name": "Le Hôtel", "reveal": true, "stats": {} }
+  ],
+  "generators": [
+    { "on": "building", "spawn": "room", "count": "4", "cascade": true, "chain": "door", "chain_ring": true,
+      "child_stats": { "idx": "index" } },
+
+    { "on": "room", "spawn": "resident", "count": "1",
+      "child_stats": { "mail": "0", "room_idx": "parent.idx" } },
+    { "on": "room", "spawn": "courier", "count": "eq(idx,0)",
+      "child_stats": { "load": "1.0", "trips": "0" } }
+  ],
+  "actions": [
+    { "on": "courier", "name": "drop_mail",
+      "score": "gt(load,0.05)*gt(here_count(),0)*1.0",
+      "effects": [
+        { "op": "affect", "stat": "co:mail", "expr": "0.25" },
+        { "op": "add", "stat": "load", "expr": "-0.15" }
+      ]
+    },
+    { "on": "courier", "name": "walk_on",
+      "score": "0.7",
+      "effects": [ { "op": "move", "stat": "door" } ]
+    }
+  ],
+  "rules": [
+    { "on": "courier", "set": "load", "expr": "clamp(load + 0.04, 0, 1)" }
+  ],
+  "events": [
+    { "on": "resident", "when": "gt(mail,0.2)*lt(got,0.5)",
+      "label": "a resident received mail",
+      "do": [ { "op": "set", "stat": "got", "expr": "1" } ]
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "_note": "A tiny PLANET template used by the `multiverse` probe — each address builds one of these, deterministically. Fast + varied per seed (region count, biomes, populations, a capital) so distinct addresses read as distinct planets, and the same address always rebuilds identical.",
+  "rng_seed": 1,
+  "seed": [
+    { "kind": "planet", "name": "world", "reveal": true, "stats": { "prosperity": 0.5, "pop": 0 } }
+  ],
+  "generators": [
+    { "on": "planet", "spawn": "region", "count": "4 + floor(5*rand(1))",
+      "child_stats": {
+        "population": "0.1 + 0.85*rand(2)",
+        "biome":      "floor(rand(3)*5)",
+        "wealth":     "0.15 + 0.8*rand(4)",
+        "capital":    "chance(0.25)"
+      }
+    }
+  ],
+  "rules": [
+    { "on": "planet", "set": "pop",        "expr": "child_sum(population)" },
+    { "on": "planet", "set": "prosperity", "expr": "child_mean(wealth)" }
+  ]
+}

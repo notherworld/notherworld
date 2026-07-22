@@ -1,0 +1,14 @@
+{
+  "steps": 12,
+  "entities": [
+    { "kind": "person", "name": "Ada", "stats": { "hardship": 0.3, "fear": 0.4, "discontent": 0.1 } },
+    { "kind": "person", "name": "Bo",  "stats": { "hardship": 0.8, "fear": 0.6, "discontent": 0.1 } },
+    { "kind": "person", "name": "Cy",  "stats": { "hardship": 0.5, "fear": 0.2, "discontent": 0.1 } }
+  ],
+  "rules": [
+    { "on": "person", "set": "hope",
+      "expr": "clamp(hope + 0.09, 0, 1)" },
+    { "on": "person", "set": "discontent",
+      "expr": "clamp(discontent + 0.3*(0.35*hardship + 0.6*fear - discontent) - 0.2*hope, 0, 1)" }
+  ]
+}

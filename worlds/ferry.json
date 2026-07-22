@@ -1,0 +1,24 @@
+{
+  "goal": 8.0,
+  "hours": 12,
+  "_note": "Last Ferry — a survival courier. Push toward the dock (progress) against two obstacles: the cold (warmth->0 = freeze) and bandits (hp->0 = robbed). Every courier choice is a utility formula. RECKLESS couriers (low caution) push through the cold to save time and sometimes freeze; CAUTIOUS ones shelter and survive but risk missing the ferry. The HOST sets each courier's traits + the night's route.",
+  "rules": [
+    { "on": "courier", "set": "warmth", "expr": "clamp(warmth - 0.04, 0, 1)" }
+  ],
+  "actions": [
+    { "on": "courier", "name": "push", "score": "0.45 + speed*0.35 + (1-caution)*0.3 - gt(0.25,warmth)*0.5 - gt(0.25,hp)*0.4",
+      "effects": [
+        {"op":"add","stat":"progress","expr":"speed"},
+        {"op":"add","stat":"warmth","expr":"-route_cold*(1-grit)"},
+        {"op":"add","stat":"hp","expr":"-iff(chance(route_bandit), 0.35*(1-fight), 0)"}
+      ] },
+    { "on": "courier", "name": "shelter", "score": "gt(0.5,warmth)*(0.4 + caution*0.7)",
+      "effects": [
+        {"op":"add","stat":"warmth","expr":"0.30"}
+      ] },
+    { "on": "courier", "name": "tend_wound", "score": "gt(0.3,hp)*(0.5 + caution*0.6)",
+      "effects": [
+        {"op":"add","stat":"hp","expr":"0.28"}
+      ] }
+  ]
+}

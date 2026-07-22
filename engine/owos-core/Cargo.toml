@@ -1,0 +1,16 @@
+[package]
+name = "owos-core"
+description = "otherworldOS simulation core — a portable, deterministic living-world runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# The core is dependency-light by default so it compiles to native, WASM, and
+# console targets. `serde` is optional — enabled only for builds that cross a
+# data boundary (the WASM portal, persistence). The default build stays zero-dep.
+[features]
+default = []
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true }

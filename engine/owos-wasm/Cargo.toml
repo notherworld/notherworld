@@ -1,0 +1,16 @@
+[package]
+name = "owos-wasm"
+description = "WASM bindings for the otherworldOS scope-tree engine — the browser/JS embedding the web console runs on."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+owos-core = { path = "../owos-core" }
+owos-author = { path = "../owos-author" }
+wasm-bindgen = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

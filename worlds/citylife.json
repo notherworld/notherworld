@@ -1,0 +1,161 @@
+{
+  "_note": "CITYLIFE — the PROBE RIG for TEMPLATE #2 (person + schedule). Blocks don't reveal under the plain `live` driver (nothing dives), so this is a SLICE of Atlas that IS revealed: the same city CLOCK, one active block, a handful of people who live a DAY. The person rules/actions/events here are the EXACT text destined for Atlas's block generator — only the spawn wiring + broadcast-chain length differ (world structure, not the template). THE GATE (read the action tally): choices must SPREAD across sleep/work/eat/socialize by time of day. If one action dominates ~100%, the schedule is broken. `mean food` (= 1-hunger) should ripple as people get hungry and eat.",
+
+  "rng_seed": 7,
+
+  "seed": [
+    { "kind": "city", "name": "Veranholm", "reveal": true,
+      "stats": { "hour": 8, "day": 0, "is_night": 0, "is_work": 1 } }
+  ],
+
+  "generators": [
+    { "_block_note": "cascade:true reveals the block (Detailed) so its people are ACTIVE — is_active(person) needs every ancestor Detailed (city is reveal:true, block is revealed here).",
+      "on": "city", "spawn": "block", "count": "1", "cascade": true,
+      "child_stats": { "busy": "0.6" } },
+
+    { "on": "block", "spawn": "person", "count": "14", "cascade": true,
+      "child_stats": {
+        "energy": "0.45 + 0.4*rand(1)",
+        "hunger": "0.1 + 0.3*rand(2)",
+        "social": "0.3 + 0.4*rand(3)",
+        "money":  "0.5",
+        "wage":   "0.14 + 0.12*rand(4)",
+        "food":   "0.8",
+        "fun":    "0.5",
+        "at":     "0"
+      }
+    },
+
+    { "_venue_note": "★ VENUES (TEMPLATE #3 + #4 woven in) — two DELIBERATELY IDENTICAL venues (same hours, same base appeal) so NOTHING authored favours either. Which one wins a given night emerges from a WEB of independent signals, none of which writes the outcome: a hidden nightly FOOD_QUALITY roll (first guests gamble), a STOCK of mains that depletes as the place gets busy (success breeds scarcity), WORD-of-mouth (mean fun of who's there now — later guests get informed), personal FUN (the food you got × the company), and the crowd pull. A popular venue with bad food tonight fills first, then empties as word spreads / it runs out — and the underdog wins. Nobody scripts that.",
+      "on": "block", "spawn": "venue", "count": "2", "cascade": true,
+      "child_stats": {
+        "kind_of":     "index",
+        "open_from":   "17",
+        "open_to":     "24",
+        "appeal":      "iff(eq(index,0), 0.85, 0.68)",
+        "is_open":     "1",
+        "appeal_now":  "0.8",
+        "crowd":       "0",
+        "cap":         "6",
+        "stock":       "6",
+        "food_quality":"0.5",
+        "served":      "0.5",
+        "word":        "0.5"
+      }
+    }
+  ],
+
+  "broadcasts": [
+    { "_clock_down_note": "Push the city CLOCK down to the block so the person's action scores can read parent.is_night / parent.is_work. One level here (block is a direct child of city); in Atlas it's two levels (city→district→block).",
+      "on": "city", "parent_stat": "hour",     "child_stat": "hour",     "gain": 1 },
+    { "on": "city", "parent_stat": "is_night", "child_stat": "is_night", "gain": 1 },
+    { "on": "city", "parent_stat": "is_work",  "child_stat": "is_work",  "gain": 1 },
+    { "_hour_to_venues_note": "relay hour one more level, block→children, so venues can gate their own open-hours.",
+      "on": "block", "parent_stat": "hour", "child_stat": "hour", "gain": 1 }
+  ],
+
+  "rules": [
+    { "_clock_note": "★ THE CLOCK (template #1) — identical to Atlas.",
+      "on": "city", "set": "hour", "expr": "hour + 0.25" },
+    { "on": "city", "set": "is_night", "expr": "clamp(ge(hour,22) + lt(hour,6), 0, 1)" },
+    { "on": "city", "set": "is_work",  "expr": "gt(hour,8)*lt(hour,18)" },
+
+    { "_needs_note": "★ NEEDS DECAY (template #2) — energy drains while awake, hunger climbs, social fades. The actions below replenish them; the balance of decay-vs-replenish is what makes a routine EMERGE rather than being scripted. `food` = 1-hunger, purely so the live driver's readout ripples.",
+      "on": "person", "set": "energy", "expr": "clamp(energy - 0.015, 0, 1)" },
+    { "on": "person", "set": "hunger", "expr": "clamp(hunger + 0.02, 0, 1)" },
+    { "on": "person", "set": "social", "expr": "clamp(social - 0.012, 0, 1)" },
+    { "on": "person", "set": "food",   "expr": "1 - hunger" },
+    { "_fun_note": "★ FUN (the personal read of the night) — while you're at a venue (guest edge live), your fun = the food you were actually SERVED (0.7) plus the buzz of the COMPANY (0.3, from the venue's crowd, both read via edge_mean over the guest edge). Off the edge it decays. This is what you FEEL; it feeds the venue's word (others learn from it) AND your own stay-or-go — a bad plate or an empty room lowers fun and you drift off.",
+      "on": "person", "set": "fun",
+      "expr": "iff(gt(edge_count(guest),0), clamp(0.9*edge_mean(guest,served) + 0.1*clamp(0.14*edge_mean(guest,crowd),0,1), 0, 1), fun*0.85)" },
+
+    { "_venue_rules_note": "★ VENUE STATE + THE EMERGENT WEB (templates #3/#4). Author order = evaluation order, so each reads fresh values. is_open from broadcast hour. crowd = guests linked now (bidirectional edge_count). served = the quality actually on the plate: the hidden food_quality WHILE stock lasts, then a poor 0.15 once the mains run out (scarcity bites). word = mean FUN of who's here now (edge_mean over the guest edge) — this is information: it only reflects reality once people have been in and formed an opinion, so early arrivals can't read it. appeal_now (what the @max pick ranks) combines THREE independent pulls — the crowd (herd), the word (quality info), and noise — none of which alone names a winner.",
+      "on": "venue", "set": "is_open", "expr": "ge(hour,open_from)*lt(hour,open_to)" },
+    { "on": "venue", "set": "crowd",   "expr": "edge_count(guest)" },
+    { "on": "venue", "set": "served",  "expr": "is_open*iff(gt(stock,0.5), food_quality, 0.05)" },
+    { "on": "venue", "set": "word",    "expr": "iff(gt(crowd,0.5), clamp(edge_mean(guest,fun),0,1), 0.5)" },
+    { "_appeal_note": "appeal_now = a standing draw (the venue's own `appeal` — the popular spot vs the dive, so business is realistically UNEVEN, never 50/50) + word-of-mouth + a WORD-GATED crowd pull (0.15*crowd*word: a crowd only attracts while it's having a GOOD TIME, so a burnt-out room stops pulling and people flee → migration) + a noise floor OUTSIDE is_open (so the opening isn't a 0-vs-0 tie that the id order would break the same way every night). The dominant venue usually wins — but a great food roll at the dive, or the favourite running dry, flips it. That's real: a spot that's usually packed, occasionally upset.",
+      "on": "venue", "set": "appeal_now", "expr": "0.5*rand(7) + is_open*(appeal + 1.0*word + 0.15*crowd*word)" }
+  ],
+
+  "actions": [
+    { "_schedule_note": "★ THE SCHEDULE (template #2) — utility AI gated on the CLOCK, NOT on scheduled-at-time events (the ⚠ untested prim). Continuous clock-gates (parent.is_night, parent.is_work) sidestep it entirely. Highest-scoring action wins each tick, so the routine is emergent: sleep pulls hard at night (harder when tired), work pulls in work hours, eat spikes with hunger any time, socialising fills the evenings/gaps. `at`: 0 home, 1 work, 2 out, 3 eatery — the location the pawn-render pass will read.",
+      "on": "person", "name": "sleep",
+      "score": "parent.is_night*(0.7 + 0.6*(1-energy))",
+      "effects": [ { "op": "add", "stat": "energy", "expr": "0.15" }, { "op": "set", "stat": "at", "expr": "0" }, { "op": "unlink", "stat": "guest" } ]
+    },
+    { "_work_tune_note": "SOFT energy term (0.4 + 0.5*energy) instead of a hard gt(energy,0.15) gate — a tired worker slows but doesn't drop dead to idle; the `idle`/break action (which SPIKES when energy<0.3) pulls them off for a breather, then work reclaims. This work→tire→break→work loop is why work is the daytime plurality without anyone running on empty.",
+      "on": "person", "name": "work",
+      "score": "parent.is_work*(0.4 + 0.5*energy)",
+      "effects": [
+        { "op": "add",    "stat": "money",  "expr": "wage" },
+        { "op": "add",    "stat": "energy", "expr": "0 - 0.02" },
+        { "op": "add",    "stat": "hunger", "expr": "0.015" },
+        { "op": "set",    "stat": "at",     "expr": "1" },
+        { "op": "unlink", "stat": "guest" }
+      ]
+    },
+    { "on": "person", "name": "eat",
+      "score": "hunger*1.4*gt(money,0.02)",
+      "effects": [
+        { "op": "add",    "stat": "hunger", "expr": "0 - 0.5" },
+        { "op": "add",    "stat": "energy", "expr": "0.05" },
+        { "op": "add",    "stat": "money",  "expr": "0 - 0.05" },
+        { "op": "set",    "stat": "at",     "expr": "3" },
+        { "op": "unlink", "stat": "guest" }
+      ]
+    },
+    { "_headout_note": "★ HEAD OUT (template #3) — pick a venue ONCE (gated on lt(edge_count(guest),1), so no per-tick re-pick → no sloshing). `link guest:venue@max:target.appeal_now` grabs the highest-appeal open venue; the busy-feedback makes newcomers join whoever's winning. The 0.55 BASE (not just a social-need term) matters for MIGRATION: after a venue burns out and you leave unsatisfied, you STILL want to be out — so you re-head_out and, since the dry venue's appeal has tanked, land next door. That's the crowd moving, unscripted.",
+      "on": "person", "name": "head_out",
+      "score": "gt(parent.hour,16.9)*lt(parent.hour,23.5)*lt(edge_count(guest),1)*(0.55 + 0.35*(1-social))",
+      "effects": [
+        { "op": "link", "stat": "guest:venue@max:target.appeal_now" },
+        { "op": "add",  "stat": "social", "expr": "0.15" },
+        { "op": "set",  "stat": "at",     "expr": "4" }
+      ]
+    },
+    { "_stayout_note": "★ STAY OUT — commitment (kills the sloshing) AND the exit valve. Score rises with how much FUN you're having, so a great night holds you and a bad one (weak food / ran out of mains / empty room → low fun) lets sleep or a break outbid this → you unlink and drift off, maybe to re-pick the OTHER venue next: that's MIGRATION, never scripted. `affect guest:stock -0.14` = you eat — every guest draws the venue's mains down, so the busiest venue burns through stock fastest (success breeds its own scarcity).",
+      "on": "person", "name": "stay_out",
+      "score": "gt(edge_count(guest),0)*gt(parent.hour,16.5)*lt(parent.hour,23.5)*(0.05 + 0.9*fun)",
+      "effects": [
+        { "op": "add",    "stat": "social", "expr": "0.25" },
+        { "op": "add",    "stat": "energy", "expr": "0 - 0.01" },
+        { "op": "affect", "stat": "guest:stock", "expr": "0 - 0.14" },
+        { "op": "set",    "stat": "at",     "expr": "4" }
+      ]
+    },
+    { "_break_note": "the breather — a low floor (0.25) most of the time, but SPIKES to ~0.85 when energy<0.3 so an exhausted person rests instead of grinding. Recovers energy faster than the drain, so it's a real recovery, not a stall.",
+      "on": "person", "name": "idle",
+      "score": "0.25 + 0.6*lt(energy,0.3)",
+      "effects": [ { "op": "add", "stat": "energy", "expr": "0.035" }, { "op": "set", "stat": "at", "expr": "2" }, { "op": "unlink", "stat": "guest" } ]
+    }
+  ],
+
+  "events": [
+    { "_clock_events_note": "day rhythm on the always-active city (template #1).",
+      "on": "city", "when": "ge(hour,24)", "label": "🌅 a new day breaks over Veranholm",
+      "do": [ { "op": "set", "stat": "hour", "expr": "hour - 24" }, { "op": "add", "stat": "day", "expr": "1" } ] },
+    { "on": "city", "when": "ge(hour,20)*lt(hour,21)", "label": "🌆 dusk — the block heads home", "do": [] },
+    { "on": "city", "when": "ge(hour,6)*lt(hour,7)",   "label": "🌇 dawn — the block wakes", "do": [] },
+
+    { "_person_events_note": "colour for the chronicle — rising-edge per person, re-arms when the need recovers.",
+      "on": "person", "when": "lt(energy,0.1)", "label": "is running on empty", "do": [] },
+    { "on": "person", "when": "gt(hunger,0.92)", "label": "goes hungry, nothing in the cupboard", "do": [] },
+
+    { "_gathering_note": "★ THE GATHERING (template #3) — rising-edge when a venue's crowd crosses a threshold: a scene kicks off. `affect guest:social` pushes a warmth bump onto every linked guest. Re-arms when the crowd thins, so it fires each time a venue fills.",
+      "on": "venue", "when": "ge(crowd,4)", "label": "🎉 the place fills up — a scene kicks off",
+      "do": [ { "op": "affect", "stat": "guest:social", "expr": "0.1" } ] },
+
+    { "_open_roll_note": "★ THE NIGHTLY ROLL (independent signal, unscripted) — at opening each night the kitchen's form is a fresh dice roll (food_quality) and the mains are restocked. rand at the open tick differs every night, so tonight's quality is NOT correlated with last night's or with the other venue's — the thing that makes each night its own story. Tight band so it fires once at open; re-arms when the venue closes.",
+      "on": "venue", "when": "ge(hour,open_from)*lt(hour,open_from+0.4)",
+      "label": "🍳 opens for the night", "do": [
+        { "op": "set", "stat": "food_quality", "expr": "0.2 + 0.7*rand(3)" },
+        { "op": "set", "stat": "stock", "expr": "cap" } ] },
+
+    { "_stockout_note": "the mains run out — a consequence of being TOO popular (crowd drained the stock). served drops to scraps, fun craters, the crowd starts to leave. Pure feedback, no schedule.",
+      "on": "venue", "when": "lt(stock,0.5)*is_open", "label": "🍽 runs out of the main course",
+      "do": [] },
+    { "on": "venue", "when": "gt(word,0.72)*gt(crowd,2)", "label": "🌟 word gets around — the spot tonight", "do": [] },
+    { "on": "venue", "when": "lt(word,0.32)*gt(crowd,2)", "label": "😐 the room sours — the food's off tonight", "do": [] }
+  ]
+}

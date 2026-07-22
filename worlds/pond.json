@@ -1,0 +1,15 @@
+{
+  "start_fish": 6,
+  "steps": 60,
+  "rules": [
+    { "on": "pond", "set": "population", "expr": "child_count()" },
+    { "on": "fish", "set": "age", "expr": "age + 1" }
+  ],
+  "actions": [
+    { "on": "fish", "name": "spawn_fry", "score": "chance(0.14) * lt(parent.population, 45)",
+      "effects": [ { "op": "spawn", "stat": "fish", "expr": "fry" } ] },
+    { "on": "fish", "name": "die", "score": "chance(0.03 + 0.006*parent.population) + gt(age, 40)",
+      "effects": [ { "op": "despawn" } ] },
+    { "on": "fish", "name": "swim", "score": "0.05", "effects": [] }
+  ]
+}

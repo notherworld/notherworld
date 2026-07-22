@@ -1,0 +1,56 @@
+{
+  "person_stats": { "energy": 0.8, "hunger": 0.2, "mood": 0.5, "satisfaction": 0.5, "output": 0, "stress": 0.3 },
+  "companies": [
+    { "name": "Tidewater Co",   "health": 0.85, "wage": 6 },
+    { "name": "Gullnet Ltd",    "health": 0.55, "wage": 4 },
+    { "name": "Dockside Forge", "health": 0.30, "wage": 3 }
+  ],
+  "people": [
+    { "name": "Mara", "company": "Tidewater Co",   "money": 120, "rent": 20 },
+    { "name": "Otho", "company": "Tidewater Co",   "money": 40,  "rent": 20 },
+    { "name": "Sela", "company": "Gullnet Ltd",    "money": 80,  "rent": 18 },
+    { "name": "Bram", "company": "Gullnet Ltd",    "money": 25,  "rent": 18 },
+    { "name": "Pia",  "company": "Dockside Forge", "money": 55,  "rent": 15 },
+    { "name": "Gil",  "company": "Dockside Forge", "money": 12,  "rent": 15 }
+  ],
+  "rules": [
+    { "on": "person", "set": "hunger", "expr": "clamp(hunger + 0.03, 0, 1)" },
+    { "on": "person", "set": "energy", "expr": "clamp(energy - 0.015, 0, 1)" },
+    { "on": "person", "set": "output", "expr": "output * 0.6" },
+    { "on": "person", "set": "stress", "expr": "clamp(stress + 0.03*(0.7 - edge_mean(works_at, health) - stress), 0, 1)" },
+    { "on": "person", "set": "mood", "expr": "clamp(mood + 0.04*(0.4 + 0.6*edge_mean(works_at, health) - 0.5*hunger - 0.3*(1 - energy) - 0.3*stress - mood), 0, 1)" },
+    { "on": "person", "set": "satisfaction", "expr": "clamp(satisfaction + 0.02*(0.4*mood + 0.4*edge_mean(works_at, health) + 0.2*min(money/200, 1) - 0.3*stress - satisfaction), 0, 1)" },
+    { "on": "company", "set": "health", "expr": "clamp(health + 0.02*(edge_mean(works_at, output) - 0.2), 0.05, 1)" },
+    { "on": "beach", "set": "occupancy", "expr": "child_count()" }
+  ],
+  "actions": [
+    { "on": "person", "name": "sleep", "score": "0.1 + is_night*(1.6 - energy)",
+      "effects": [
+        { "op": "set",  "stat": "energy", "expr": "clamp(energy + 0.18, 0, 1)" },
+        { "op": "move", "stat": "home" } ] },
+    { "on": "person", "name": "work", "score": "is_work * energy * (1 - hunger) * (0.5 + 0.5*edge_mean(works_at, health))",
+      "effects": [
+        { "op": "add",  "stat": "money",  "expr": "edge_mean(works_at, wage)" },
+        { "op": "set",  "stat": "output", "expr": "0.5 + 0.5*mood" },
+        { "op": "set",  "stat": "energy", "expr": "clamp(energy - 0.05, 0, 1)" },
+        { "op": "set",  "stat": "hunger", "expr": "clamp(hunger + 0.02, 0, 1)" },
+        { "op": "move", "stat": "works_at" } ] },
+    { "on": "person", "name": "eat", "score": "hunger * (0.6 + 0.6*min(money/6, 1))",
+      "effects": [
+        { "op": "set",  "stat": "hunger", "expr": "clamp(hunger - 0.55, 0, 1)" },
+        { "op": "set",  "stat": "money",  "expr": "max(money - 3, 0)" },
+        { "op": "move", "stat": "home" } ] },
+    { "on": "person", "name": "shop", "score": "is_leisure * min(money/60, 1) * (0.3 + 0.5*mood) * (1 - 0.6*stress)",
+      "effects": [
+        { "op": "set",  "stat": "mood",         "expr": "clamp(mood + 0.16, 0, 1)" },
+        { "op": "set",  "stat": "satisfaction", "expr": "clamp(satisfaction + 0.05, 0, 1)" },
+        { "op": "set",  "stat": "money",        "expr": "max(money - 8, 0)" },
+        { "op": "move", "stat": "home" } ] },
+    { "on": "person", "name": "beach", "score": "is_leisure * (0.15 + 0.85*stress)",
+      "effects": [
+        { "op": "set",  "stat": "stress", "expr": "clamp(stress - 0.12, 0, 1)" },
+        { "op": "set",  "stat": "mood",   "expr": "clamp(mood + 0.06, 0, 1)" },
+        { "op": "set",  "stat": "energy", "expr": "clamp(energy - 0.02, 0, 1)" },
+        { "op": "move", "stat": "leisure" } ] }
+  ]
+}

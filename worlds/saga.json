@@ -1,0 +1,54 @@
+{
+  "_note": "HEARTHWICK — a settlement over a lifetime, the ult showcase. mode=0: coarse YEARS (age, wealth, standing drift; people befriend/feud/marry/undermine each other via the interaction prims; events narrate the saga). mode=1: a single day or conversation UNFOLDS in detail. The feud is fractal — a line in the town's history, a stat on two people, and (zoomed all the way in) a tense conversation whose outcome writes back up to the town.",
+
+  "rules": [
+    { "on": "person", "set": "age",       "expr": "age + eq(mode,0)" },
+    { "on": "person", "set": "health",    "expr": "clamp(health + eq(mode,0)*(0.004 - 0.0007*max(age-40,0) - 0.12*hard_year), 0, 1)" },
+    { "on": "person", "set": "wealth",    "expr": "clamp(wealth + eq(mode,0)*(0.02*standing + 0.008 - 0.12*hard_year), 0, 1)" },
+    { "on": "person", "set": "standing",  "expr": "clamp(standing + eq(mode,0)*0.08*((0.15 + 0.4*wealth + 0.25*bonds - 0.45*grievance) - standing), 0, 1)" },
+    { "on": "person", "set": "grievance", "expr": "clamp(grievance + eq(mode,0)*(0.05*edge_count(rival) - 0.025), 0, 1)" },
+    { "on": "person", "set": "bonds",     "expr": "clamp(bonds + eq(mode,0)*(0.025*edge_count(friend) + 0.06*edge_count(spouse) - 0.012), 0, 1)" }
+  ],
+
+  "actions": [
+    { "on": "person", "name": "befriend",       "score": "eq(mode,0)*warmth*lt(edge_count(friend),4)*0.35",                   "effects": [ {"op":"link","stat":"friend:person"} ] },
+    { "on": "person", "name": "start_a_feud",    "score": "eq(mode,0)*eq(at_peace,0)*pride*pride*(0.4 + grievance)*lt(edge_count(rival),3)*0.95", "effects": [ {"op":"link","stat":"rival:person"} ] },
+    { "on": "person", "name": "undermine_rival", "score": "eq(mode,0)*eq(at_peace,0)*pride*gt(edge_count(rival),0)*0.8",                      "effects": [ {"op":"affect","stat":"rival:standing","expr":"-max(0.05*pride - 0.08*target.bonds, 0.005)"} ] },
+    { "on": "person", "name": "court",           "score": "eq(mode,0)*gt(age,20)*lt(edge_count(spouse),1)*bonds*chance(0.3)*1.0", "effects": [ {"op":"link","stat":"spouse:person"} ] },
+    { "on": "person", "name": "support_spouse",  "score": "eq(mode,0)*gt(edge_count(spouse),0)*0.22",                          "effects": [ {"op":"affect","stat":"spouse:wealth","expr":"0.04"} ] },
+    { "on": "person", "name": "mend_ties",       "score": "eq(mode,0)*warmth*gt(edge_count(rival),0)*(1-pride)*0.35",          "effects": [ {"op":"unlink","stat":"rival"} ] },
+    { "on": "person", "name": "keep_to_self",    "score": "eq(mode,0)*0.08",                                                  "effects": [] },
+
+    { "on": "person", "name": "tend the hearth",     "score": "eq(mode,1)*eq(tod,0)*1.0",              "effects": [] },
+    { "on": "person", "name": "work the land",       "score": "eq(mode,1)*eq(tod,1)*health*1.0",       "effects": [] },
+    { "on": "person", "name": "brood on the feud",   "score": "eq(mode,1)*eq(tod,1)*grievance*1.3",    "effects": [] },
+    { "on": "person", "name": "share a meal",        "score": "eq(mode,1)*eq(tod,2)*bonds*1.0",        "effects": [] },
+    { "on": "person", "name": "drink alone",         "score": "eq(mode,1)*eq(tod,2)*grievance*0.9",    "effects": [] },
+    { "on": "person", "name": "sleep uneasy",        "score": "eq(mode,1)*eq(tod,3)*grievance*1.0",    "effects": [] },
+    { "on": "person", "name": "sleep soundly",       "score": "eq(mode,1)*eq(tod,3)*(1-grievance)*1.0","effects": [] }
+  ],
+
+  "events": [
+    { "on": "person", "when": "gt(age,16)*eq(adult,0)*eq(mode,0)",                              "label": "came of age",              "do": [ {"op":"set","stat":"adult","expr":"1"}, {"op":"add","stat":"standing","expr":"0.08"} ] },
+    { "on": "person", "when": "gt(edge_count(spouse),0)*eq(wed_logged,0)*eq(mode,0)",           "label": "was wed",                  "do": [ {"op":"set","stat":"wed_logged","expr":"1"}, {"op":"add","stat":"bonds","expr":"0.1"} ] },
+    { "on": "person", "when": "gt(edge_count(rival),1)*gt(grievance,0.5)*eq(feud_logged,0)*eq(mode,0)", "label": "fell into a bitter feud", "do": [ {"op":"set","stat":"feud_logged","expr":"1"} ] },
+    { "on": "person", "when": "gt(standing,0.85)*eq(prom_logged,0)*eq(mode,0)",                 "label": "rose to prominence",       "do": [ {"op":"set","stat":"prom_logged","expr":"1"} ] },
+    { "on": "person", "when": "(gt(age,72)*chance(0.3) + lt(health,0.04))*eq(mode,0)",          "label": "died",                     "do": [ {"op":"despawn"} ] }
+  ],
+
+  "rollups": [
+    { "parent": "settlement", "child_stat": "grievance", "parent_stat": "tension",    "reduce": "mean" },
+    { "parent": "settlement", "child_stat": "wealth",    "parent_stat": "prosperity", "reduce": "mean" },
+    { "parent": "settlement", "child_stat": "standing",  "parent_stat": "eminence",   "reduce": "max" }
+  ],
+  "broadcasts": [
+    { "parent_stat": "hard_year", "child_stat": "hard_year", "gain": 1.0 }
+  ],
+
+  "convo_moves": [
+    { "name": "extend an olive branch", "effects": [ {"op":"add","stat":"warmth","expr":"0.12"}, {"op":"add","stat":"tension","expr":"-0.08"}, {"op":"add","stat":"resolve","expr":"0.06"} ] },
+    { "name": "recall an old kindness",  "effects": [ {"op":"add","stat":"warmth","expr":"0.08 + 0.12*rival_warmth"}, {"op":"add","stat":"resolve","expr":"0.10"} ] },
+    { "name": "air the old grievance",   "effects": [ {"op":"add","stat":"tension","expr":"0.15 - 0.1*rival_warmth"}, {"op":"add","stat":"resolve","expr":"-0.04"} ] },
+    { "name": "propose a truce",         "effects": [ {"op":"add","stat":"resolve","expr":"0.25*gt(warmth,0.55) - 0.2*gt(tension,0.6)"}, {"op":"add","stat":"tension","expr":"iff(gt(warmth,0.55), -0.1, 0.12)"} ] }
+  ]
+}

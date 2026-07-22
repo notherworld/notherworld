@@ -1,0 +1,66 @@
+:root { --ink: #e8ecf6; --ink-dim: #8592ad; --accent: #ffd36b; --line: rgba(255,255,255,0.10); }
+
+* { box-sizing: border-box; }
+html, body, #temple { margin: 0; min-height: 100%; width: 100%; background: #04050a;
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace; color: var(--ink); }
+
+.temple-root { padding: 16px 18px 40px; max-width: 1240px; margin: 0 auto; }
+
+.temple-bar { display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px; font-size: 13px; }
+.temple-bar b { font-size: 17px; letter-spacing: 0.5px; }
+.temple-bar .dim { color: var(--ink-dim); }
+.temple-seed { margin-left: auto; color: var(--ink-dim); font-size: 12px; display: flex; gap: 6px; align-items: center; }
+.temple-seed input { width: 90px; background: rgba(255,255,255,0.05); border: 1px solid var(--line);
+  border-radius: 6px; color: var(--ink); font: inherit; padding: 4px 7px; outline: none; }
+.temple-seed input:focus { border-color: var(--accent); }
+
+.temple-panes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.temple-pane { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: rgba(8,11,20,0.6); }
+.temple-pane-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; margin-bottom: 8px; }
+.temple-pane-head b { color: var(--accent); }
+.temple-pane-head span { color: var(--ink-dim); font-size: 11px; }
+.temple-back { font: inherit; font-size: 11px; color: var(--ink); background: rgba(255,255,255,0.05);
+  border: 1px solid var(--line); border-radius: 6px; padding: 2px 9px; cursor: pointer; }
+.temple-back:hover { color: var(--accent); border-color: var(--accent); }
+.temple-canvas { cursor: crosshair; }
+.temple-canvas-wrap { position: relative; }
+.temple-canvas { width: 100%; display: block; border-radius: 8px;
+  image-rendering: pixelated; image-rendering: crisp-edges; }
+.temple-status { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px;
+  color: var(--ink-dim); background: rgba(4,5,10,0.5); border-radius: 8px; }
+.temple-blurb { margin-top: 8px; color: var(--ink-dim); font-size: 11px; line-height: 1.5; }
+
+.temple-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.temple-col { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: rgba(8,11,20,0.6); }
+.temple-wide { grid-column: 1 / -1; }
+.temple-h { font-size: 11px; color: var(--ink-dim); margin: 10px 0 6px; text-transform: lowercase; letter-spacing: 0.4px; }
+.temple-h:first-child { margin-top: 0; }
+.temple-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.temple-row button { font: inherit; font-size: 12px; color: var(--ink); background: rgba(255,255,255,0.05);
+  border: 1px solid var(--line); border-radius: 7px; padding: 4px 11px; cursor: pointer; }
+.temple-row button:hover { border-color: var(--accent); color: var(--accent); }
+.temple-row button.on { border-color: var(--accent); color: var(--accent); }
+.temple-note { margin-top: 10px; font-size: 11px; color: var(--accent); }
+.temple-inline { align-items: center; font-size: 11px; color: var(--ink-dim); margin-top: 8px; }
+.temple-h i { color: var(--ink-dim); font-style: italic; }
+
+.temple-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.temple-grid label { display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  font-size: 11px; color: var(--ink-dim); }
+.temple-grid input[type="color"] { width: 42px; height: 24px; border: 1px solid var(--line); border-radius: 5px;
+  background: transparent; padding: 0; cursor: pointer; }
+
+.temple-slider { display: block; font-size: 11px; color: var(--ink-dim); margin-top: 8px; }
+.temple-slider input { width: 100%; accent-color: var(--accent); }
+.temple-check { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--ink-dim); margin-top: 10px; }
+.temple-check input { accent-color: var(--accent); }
+
+.temple-wide textarea { width: 100%; min-height: 74px; resize: vertical; background: rgba(255,255,255,0.04);
+  border: 1px solid var(--line); border-radius: 8px; color: var(--ink); font: inherit; font-size: 12px;
+  line-height: 1.5; padding: 8px 10px; outline: none; }
+.temple-wide textarea:focus { border-color: var(--accent); }
+.temple-wide .temple-row { margin-top: 8px; }
+
+@media (max-width: 900px) {
+  .temple-panes, .temple-controls { grid-template-columns: 1fr; }
+}

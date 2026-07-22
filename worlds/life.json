@@ -1,0 +1,26 @@
+{
+  "steps": 24,
+  "entities": [
+    { "kind": "worker", "name": "Bram", "stats": { "energy": 0.85, "hunger": 0.1, "coins": 0 } }
+  ],
+  "rules": [
+    { "on": "worker", "set": "hunger", "expr": "clamp(hunger + 0.06, 0, 1)" },
+    { "on": "worker", "set": "energy", "expr": "clamp(energy - 0.02, 0, 1)" }
+  ],
+  "actions": [
+    { "on": "worker", "name": "work", "score": "energy * (1 - hunger) * 1.2",
+      "effects": [
+        { "stat": "coins", "op": "add", "expr": "3" },
+        { "stat": "energy", "op": "set", "expr": "clamp(energy - 0.10, 0, 1)" }
+      ] },
+    { "on": "worker", "name": "eat", "score": "hunger * 1.6",
+      "effects": [
+        { "stat": "hunger", "op": "set", "expr": "clamp(hunger - 0.6, 0, 1)" },
+        { "stat": "coins", "op": "add", "expr": "-1" }
+      ] },
+    { "on": "worker", "name": "rest", "score": "1 - energy",
+      "effects": [
+        { "stat": "energy", "op": "set", "expr": "clamp(energy + 0.35, 0, 1)" }
+      ] }
+  ]
+}

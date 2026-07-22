@@ -1,0 +1,36 @@
+{
+  "name": "Saltmarsh",
+  "outer": "the muddy streets of Saltmarsh",
+  "people": ["Bram", "Elsie", "Tomas", "Rue", "Gil", "Mara", "Otho", "Sela", "Doran", "Wyn", "Hale", "Pia"],
+  "room_types": [
+    { "key": "taproom", "objects": ["a long oak bar", "a roaring hearth", "ale barrels", "round tables"] },
+    { "key": "kitchen", "objects": ["a cook fire", "an iron cauldron", "hanging herbs", "a cutting block"] },
+    { "key": "cellar", "objects": ["wine racks", "dusty crates", "a locked chest"] },
+    { "key": "guest room", "objects": ["a narrow bed", "a travel chest", "a guttering candle"] },
+    { "key": "hall", "objects": ["a hearth", "a plank table", "worn stools"] },
+    { "key": "bedroom", "objects": ["a straw bed", "a blanket chest"] },
+    { "key": "forge floor", "objects": ["an anvil", "a glowing forge", "a bellows", "a tool rack"] },
+    { "key": "storeroom", "objects": ["iron ingots", "crates", "water barrels"] },
+    { "key": "nave", "objects": ["rows of pews", "a stone font"] },
+    { "key": "altar", "objects": ["a candlelit altar", "an offering bowl"] },
+    { "key": "vestry", "objects": ["hanging robes", "a locked reliquary"] },
+    { "key": "shopfront", "objects": ["drying herbs", "tincture bottles", "a mortar and pestle"] },
+    { "key": "back room", "objects": ["a bubbling still", "jars of strange roots"] }
+  ],
+  "building_types": [
+    { "key": "tavern", "names": ["The Prancing Pony", "The Green Dragon", "The Broken Tankard"], "rows": 2, "cols": 2,
+      "rooms": ["taproom", "kitchen", "cellar", "guest room"],
+      "occupants": [{ "role": "barkeep", "room": "taproom" }, { "role": "cook", "room": "kitchen" }, { "role": "weary traveler", "room": "guest room" }] },
+    { "key": "cottage", "names": ["a mossy cottage", "a tidy cottage", "a leaning cottage"], "rows": 1, "cols": 2,
+      "rooms": ["hall", "bedroom"], "occupants": [{ "role": "old farmer", "room": "hall" }] },
+    { "key": "smithy", "names": ["The Anvil & Ember", "the village smithy"], "rows": 1, "cols": 2,
+      "rooms": ["forge floor", "storeroom"],
+      "occupants": [{ "role": "blacksmith", "room": "forge floor" }, { "role": "apprentice", "room": "forge floor" }] },
+    { "key": "temple", "names": ["the Shrine of the Tide", "the Old Temple"], "rows": 1, "cols": 3,
+      "rooms": ["nave", "altar", "vestry"],
+      "occupants": [{ "role": "priest", "room": "altar" }, { "role": "acolyte", "room": "nave" }] },
+    { "key": "apothecary", "names": ["Mother Rue's shop", "the Herbalist's"], "rows": 1, "cols": 2,
+      "rooms": ["shopfront", "back room"], "occupants": [{ "role": "herbalist", "room": "shopfront" }] }
+  ],
+  "plan": ["tavern", "smithy", "temple", "apothecary", "cottage", "cottage", "tavern"]
+}

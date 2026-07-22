@@ -1,0 +1,92 @@
+{
+  "_note": "THE KITCHEN — the 'complex sim, barely any JSON' example from the writeup, as a real world you can run. Six cooks with skill/morale/ambition/warmth and a home with AC. They work service (skill climbs), MENTOR apprentices (edges) or FEUD over the pass (rival edges → undercutting), and — the beat nobody scripts — when a cook's AC dies in the heat they sleep badly, morale drags, and the whole line is a step slow the next day. Skill×morale rolls up to the kitchen's quality, which rolls up to the restaurant's reputation climbing toward a star and a gala. Nobody writes 'Andrew has a bad day'; his AC does. Run: cargo run --release --bin live -- worlds/kitchen.json 320 cook",
+
+  "rng_seed": 3,
+
+  "seed": [
+    { "kind": "restaurant", "name": "Andrews", "reveal": true,
+      "stats": { "reputation": 0.4, "day": 0, "kq": 0.4 } }
+  ],
+
+  "generators": [
+    { "on": "restaurant", "spawn": "kitchen", "count": "1", "cascade": true,
+      "child_stats": { "quality": "0.4", "spirit": "0.6" } },
+    { "on": "kitchen", "spawn": "cook", "count": "6",
+      "child_stats": {
+        "skill":     "0.15 + 0.45*rand(1)",
+        "morale":    "0.55 + 0.3*rand(2)",
+        "ambition":  "0.2 + 0.7*rand(3)",
+        "warmth":    "0.2 + 0.7*rand(4)",
+        "ac_ok":     "1",
+        "slept":     "0.9",
+        "age":       "0.05 + 0.3*rand(5)",
+        "promoted":  "0",
+        "alive":     "1"
+      }
+    }
+  ],
+
+  "rollups": [
+    { "parent": "kitchen",    "child_stat": "effective", "parent_stat": "quality", "reduce": "mean" },
+    { "parent": "kitchen",    "child_stat": "morale",    "parent_stat": "spirit",  "reduce": "mean" },
+    { "parent": "restaurant", "child_stat": "quality",   "parent_stat": "kq",      "reduce": "max" }
+  ],
+
+  "rules": [
+    { "on": "restaurant", "set": "day", "expr": "day + 1" },
+    { "on": "restaurant", "set": "reputation", "expr": "clamp(reputation + 0.02*(kq - reputation), 0, 1)" },
+
+    { "_sleep_note": "a broken AC in the heat = a bad night = morale bleeds; a good night lifts it. This one rule is the whole 'Andrew's AC died so he's off today' beat.",
+      "on": "cook", "set": "slept",  "expr": "iff(eq(ac_ok,0), 0.2, 0.9)" },
+    { "on": "cook", "set": "morale", "expr": "clamp(morale + 0.035*(slept - 0.5) - morale_hit, 0, 1)" },
+    { "on": "cook", "set": "age",    "expr": "age + 0.003" },
+    { "_effective_note": "what you're actually worth on the line tonight = skill tempered by morale (a great cook having a bad day cooks worse). Rolls up to kitchen quality.",
+      "on": "cook", "set": "effective", "expr": "skill*morale*alive" },
+    { "on": "cook", "set": "morale_hit", "expr": "0" }
+  ],
+
+  "actions": [
+    { "on": "cook", "name": "work_service",
+      "score": "gt(morale,0.1)*(0.4 + 0.4*morale)*(0.4 + skill)",
+      "effects": [ { "op": "add", "stat": "skill", "expr": "0.004*(1 - skill)" } ]
+    },
+    { "on": "cook", "name": "mentor",
+      "score": "warmth*gt(skill,0.5)*gt(morale,0.45)*lt(edge_count(mentee),2)*1.1",
+      "effects": [ { "op": "link", "stat": "mentee:cook" } ]
+    },
+    { "on": "cook", "name": "coach",
+      "score": "warmth*gt(edge_count(mentee),0)*gt(morale,0.4)*(0.8 + 0.6*chance(0.5))",
+      "effects": [ { "op": "affect", "stat": "mentee:skill", "expr": "0.03*gt(skill, target.skill)" } ]
+    },
+    { "on": "cook", "name": "vie_for_the_pass",
+      "score": "ambition*(1 - warmth)*gt(skill,0.35)*lt(edge_count(rival),2)*1.4",
+      "effects": [ { "op": "link", "stat": "rival:cook" } ]
+    },
+    { "on": "cook", "name": "undercut_rival",
+      "score": "ambition*(1 - warmth)*gt(edge_count(rival),0)*(0.7 + 0.6*chance(0.4))",
+      "effects": [ { "op": "affect", "stat": "rival:morale_hit", "expr": "0.05*ambition" } ]
+    },
+    { "on": "cook", "name": "take_a_breather",
+      "score": "0.35 + 0.7*lt(morale,0.35)",
+      "effects": [ { "op": "add", "stat": "morale", "expr": "0.06" } ]
+    }
+  ],
+
+  "events": [
+    { "_ac_note": "break and fix use rand() with DIFFERENT salts (8 and 9), not chance() — multiple chance() calls in one tick share the same roll, so they'd correlate and the AC would break-and-fix on the same tick. Independent salts → a broken AC lingers ~30 days (1/0.03), a real slump.",
+      "on": "cook", "when": "eq(ac_ok,1)*lt(rand(8),0.02)*gt(age,0.12)",
+      "label": "🌡 the AC packs in during the heatwave", "do": [ { "op": "set", "stat": "ac_ok", "expr": "0" } ] },
+    { "on": "cook", "when": "eq(ac_ok,0)*lt(rand(9),0.03)",
+      "label": "gets the AC fixed at last", "do": [ { "op": "set", "stat": "ac_ok", "expr": "1" } ] },
+
+    { "on": "cook", "when": "gt(skill,0.8)*lt(promoted,0.5)",
+      "label": "🎖 earns a station — promoted up the brigade", "do": [ { "op": "set", "stat": "promoted", "expr": "1" }, { "op": "add", "stat": "morale", "expr": "0.15" } ] },
+    { "on": "cook", "when": "lt(morale,0.06)*gt(age,0.3)",
+      "label": "burns out and walks", "do": [ { "op": "set", "stat": "alive", "expr": "0" }, { "op": "unlink", "stat": "mentee" }, { "op": "unlink", "stat": "rival" }, { "op": "despawn" } ] },
+
+    { "on": "restaurant", "when": "gt(reputation,0.6)*lt(starred,0.5)",
+      "label": "★ the kitchen earns its first star", "do": [ { "op": "set", "stat": "starred", "expr": "1" } ] },
+    { "on": "restaurant", "when": "gt(reputation,0.8)*lt(gala,0.5)",
+      "label": "★★ a rave review — the gala is booked", "do": [ { "op": "set", "stat": "gala", "expr": "1" } ] }
+  ]
+}

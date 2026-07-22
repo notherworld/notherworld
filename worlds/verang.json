@@ -1,0 +1,180 @@
+{
+  "_note": "VERANG CITY — the break test: a GTA-brain running EVERY subsystem at once in one world, no host code. Districts are scope-tree parents, each with a `contraband` commons (draining rollup) and `heat`. Citizens hustle (draw down the commons → district wealth), do crime (raise district heat → rolls up to CITY heat → broadcasts danger back down), form crews & rivalries (link), brawl across rival edges (affect + target.hp), get born (spawn inheritance) and die (despawn), and MIGRATE to a calmer district when heat spikes (move along a `road` edge). The bet: all the loops we proved SEPARATELY (commons, gang war, heat/consequence, LOD, lineage) run TOGETHER and stay coherent + deterministic. Whatever cracks first is the next prim.",
+
+  "rng_seed": 11,
+
+  "seed": [
+    {
+      "kind": "city",
+      "name": "Verang",
+      "reveal": true,
+      "stats": { "heat": 0.0, "wealth": 0.0, "population": 0.0 }
+    }
+  ],
+
+  "generators": [
+    {
+      "on": "city",
+      "spawn": "district",
+      "count": "4",
+      "cascade": true,
+      "child_stats": {
+        "contraband": "0.7 + 0.25*rand(1)",
+        "regrow": "0.04 + 0.02*rand(2)",
+        "heat": "0.05*rand(3)",
+        "draw": "0",
+        "crime": "0",
+        "danger": "0",
+        "seed_pop": "10 + 6*rand(4)"
+      }
+    },
+    {
+      "on": "district",
+      "spawn": "citizen",
+      "count": "seed_pop",
+      "child_stats": {
+        "cash": "0.3 + 0.4*rand(1)",
+        "hp": "0.7 + 0.3*rand(2)",
+        "nerve": "0.2 + 0.7*rand(3)",
+        "greed": "0.2 + 0.7*rand(4)",
+        "loyalty": "0.2 + 0.6*rand(5)",
+        "age": "0.1 + 0.3*rand(6)",
+        "ration": "0.8",
+        "danger": "0",
+        "took": "0",
+        "crime_done": "0",
+        "alive": "1"
+      }
+    }
+  ],
+
+  "broadcasts": [
+    { "parent_stat": "danger", "child_stat": "danger", "gain": 1.0 },
+    { "parent_stat": "heat",   "child_stat": "ration", "gain": -0.5 }
+  ],
+
+  "rollups": [
+    { "parent": "district", "child_stat": "took",       "parent_stat": "draw",  "reduce": "sum",  "drain": true },
+    { "parent": "district", "child_stat": "crime_done", "parent_stat": "crime", "reduce": "sum",  "drain": true },
+    { "parent": "district", "child_stat": "alive",      "parent_stat": "pop",   "reduce": "sum" },
+    { "parent": "city",     "child_stat": "heat",       "parent_stat": "heat",  "reduce": "mean" },
+    { "parent": "city",     "child_stat": "pop",        "parent_stat": "population", "reduce": "sum" },
+    { "parent": "city",     "child_stat": "wealth",     "parent_stat": "wealth", "reduce": "sum" }
+  ],
+
+  "rules": [
+    { "on": "district", "set": "contraband",
+      "expr": "clamp(contraband + regrow*(1 - contraband) - draw*0.04, 0, 1)" },
+    { "on": "district", "set": "heat",
+      "expr": "clamp(heat + 0.06*crime - 0.03, 0, 1)" },
+    { "on": "district", "set": "danger",
+      "expr": "heat" },
+    { "on": "district", "set": "wealth",
+      "expr": "clamp(0.5*draw + 0.3*pop*0.02, 0, 20)" },
+
+    { "on": "citizen", "set": "age",  "expr": "age + 0.01" },
+    { "on": "citizen", "set": "cash",
+      "expr": "clamp(cash - 0.03 - 0.02*danger, 0, 3)" },
+    { "on": "citizen", "set": "hp",
+      "expr": "clamp(hp + 0.03*gt(cash,0.4) - 0.05*danger, 0, 1)" },
+    { "on": "citizen", "set": "ration", "expr": "clamp(ration, 0, 1)" }
+  ],
+
+  "actions": [
+    { "on": "citizen", "name": "hustle",
+      "score": "gt(ration,0.05)*(0.5 + 1.2*lt(cash,0.9))*(0.5+greed)",
+      "effects": [
+        { "op": "add", "stat": "cash", "expr": "0.14*ration*(0.5+nerve)" },
+        { "op": "set", "stat": "took", "expr": "0.14*ration*(0.5+nerve)" }
+      ]
+    },
+
+    { "on": "citizen", "name": "crime",
+      "score": "greed*nerve*(0.4 + danger)*lt(cash,0.6)*1.1",
+      "effects": [
+        { "op": "add", "stat": "cash", "expr": "0.2*nerve" },
+        { "op": "set", "stat": "crime_done", "expr": "1" }
+      ]
+    },
+
+    { "on": "citizen", "name": "join_crew",
+      "score": "loyalty*gt(cash,0.4)*lt(edge_count(crew),5)*0.7",
+      "effects": [ { "op": "link", "stat": "crew:citizen" } ]
+    },
+
+    { "on": "citizen", "name": "make_rival",
+      "score": "nerve*(1-loyalty)*gt(danger,0.4)*lt(edge_count(rival),4)*0.9",
+      "effects": [ { "op": "link", "stat": "rival:citizen" } ]
+    },
+
+    { "on": "citizen", "name": "brawl",
+      "score": "nerve*gt(edge_count(rival),0)*(0.3+danger)*1.0",
+      "effects": [
+        { "op": "affect", "stat": "rival:hp", "expr": "-0.15*nerve*(1 - 0.5*target.nerve)" }
+      ]
+    },
+
+    { "on": "citizen", "name": "back_crew",
+      "score": "loyalty*gt(edge_count(crew),0)*gt(cash,0.6)*0.6",
+      "effects": [
+        { "op": "affect", "stat": "crew:cash", "expr": "0.05*gt(cash, target.cash)" },
+        { "op": "add", "stat": "cash", "expr": "-0.04" }
+      ]
+    },
+
+    { "on": "citizen", "name": "flee_district",
+      "score": "gt(danger,0.6)*(1-nerve)*gt(edge_count(road),0)*1.3",
+      "effects": [ { "op": "move", "stat": "road" } ]
+    },
+
+    { "on": "citizen", "name": "lay_low",
+      "score": "0.2 + 0.3*danger",
+      "effects": [ { "op": "add", "stat": "hp", "expr": "0.02" } ]
+    }
+  ],
+
+  "events": [
+    { "on": "citizen", "when": "gt(cash,1.1)*gt(age,0.3)*lt(age,1.8)*chance(0.35)",
+      "label": "had a kid",
+      "do": [
+        { "op": "add", "stat": "cash", "expr": "-0.5" },
+        { "op": "spawn", "stat": "citizen", "expr": "kid of" }
+      ]
+    },
+    { "on": "citizen", "when": "lt(hp,0.03)",
+      "label": "was killed",
+      "do": [
+        { "op": "set", "stat": "alive", "expr": "0" },
+        { "op": "unlink", "stat": "rival" },
+        { "op": "unlink", "stat": "crew" },
+        { "op": "despawn" }
+      ]
+    },
+    { "on": "citizen", "when": "lt(cash,0.01)*lt(hp,0.2)",
+      "label": "went under",
+      "do": [
+        { "op": "set", "stat": "alive", "expr": "0" },
+        { "op": "despawn" }
+      ]
+    },
+    { "on": "citizen", "when": "gt(age,2.2)",
+      "label": "died old",
+      "do": [
+        { "op": "set", "stat": "alive", "expr": "0" },
+        { "op": "unlink", "stat": "rival" },
+        { "op": "unlink", "stat": "crew" },
+        { "op": "despawn" }
+      ]
+    },
+
+    { "on": "district", "when": "gt(heat,0.75)",
+      "label": "district goes hot — the block is a warzone",
+      "do": [] },
+    { "on": "district", "when": "lt(contraband,0.1)",
+      "label": "the supply dries up",
+      "do": [] },
+    { "on": "city", "when": "gt(heat,0.6)",
+      "label": "VERANG in chaos — citywide heat",
+      "do": [] }
+  ]
+}

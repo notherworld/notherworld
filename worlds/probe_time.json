@@ -1,0 +1,24 @@
+{
+  "_note": "BREAK-PROBE: scheduled/timed events. Q1: can a pure-data event fire at an ABSOLUTE time (day 40)? Q2: can one fire PERIODICALLY (every 7 ticks — payday)? Q1 should work via a day counter + rising-edge. Q2 needs modulo, which the DSL lacks — this is the suspected break. A `clock` entity counts ticks; a `worker` gets paid on payday.",
+  "rng_seed": 1,
+  "seed": [
+    { "kind": "clock", "name": "Clock", "reveal": true,
+      "stats": { "t": 0, "week": 0, "since_pay": 0 } }
+  ],
+  "generators": [
+    { "on": "clock", "spawn": "worker", "count": "3",
+      "child_stats": { "wage": "0.2 + 0.1*rand(1)", "purse": "0", "paid_count": "0" } }
+  ],
+  "rules": [
+    { "on": "clock", "set": "t", "expr": "t + 1" },
+    { "on": "clock", "set": "since_pay", "expr": "since_pay + 1" }
+  ],
+  "events": [
+    { "on": "clock", "when": "gt(t,39.5)*lt(t,40.5)",
+      "label": "ABSOLUTE: the health inspector arrives (day 40)",
+      "do": [] },
+    { "on": "clock", "when": "gt(since_pay,6.5)",
+      "label": "PERIODIC: payday (every 7 ticks)",
+      "do": [ { "op": "set", "stat": "since_pay", "expr": "0" } ] }
+  ]
+}

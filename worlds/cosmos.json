@@ -1,0 +1,20 @@
+{
+  "_note": "COSMOS — a world whose LAWS are injected per-universe by the `cosmos` probe. The rules READ law-stats (river_road, suns), so the SAME spec produces worlds that behave by different physics: where rivers are highways, riverside towns thrive; where they're water, they cut the land. Proves the rulebook itself is a deterministic function of the address — no engine change, just data.",
+  "rng_seed": 1,
+  "seed": [
+    { "kind": "planet", "name": "world", "reveal": true,
+      "stats": { "river_road": 0, "suns": 1, "prosperity": 0.5, "mobility": 0.5 } }
+  ],
+  "generators": [
+    { "on": "planet", "spawn": "region", "count": "4 + floor(4*rand(1))",
+      "child_stats": { "wealth": "0.2 + 0.7*rand(2)", "by_river": "chance(0.5)" } }
+  ],
+  "rules": [
+    { "_law_note": "a riverside region's mobility depends on the UNIVERSE'S LAW: if rivers are roads (river_road), the river IS the highway (0.95); if rivers are water, it's a barrier (0.2). Inland regions travel by road (0.6) regardless.",
+      "on": "region", "set": "mobility",
+      "expr": "iff(gt(by_river,0.5), iff(gt(parent.river_road,0.5), 0.95, 0.2), 0.6)" },
+    { "on": "planet", "set": "mobility",   "expr": "child_mean(mobility)" },
+    { "on": "planet", "set": "prosperity",
+      "expr": "clamp(child_mean(wealth) * (0.55 + 0.4*mobility) * (0.7 + 0.2*suns), 0, 1)" }
+  ]
+}

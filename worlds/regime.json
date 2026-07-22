@@ -1,0 +1,21 @@
+{
+  "citizens": 8,
+  "months": 96,
+  "polity": { "tenure": 5, "regime": 0, "prosperity": 0.30 },
+  "citizen": { "fondness": 0.5, "life": 0.5, "baseline": 0.5, "seen_regime": 0 },
+  "rules": [
+    { "on": "citizen", "set": "life", "expr": "clamp(life + 0.05*(parent.prosperity - life), 0, 1)" },
+    { "on": "citizen", "set": "baseline", "expr": "iff(gt(abs(parent.regime - seen_regime), 0.5), life, baseline)" },
+    { "on": "citizen", "set": "seen_regime", "expr": "parent.regime" },
+    { "on": "citizen", "set": "fondness",
+      "expr": "clamp(fondness + 0.2*(iff(lt(parent.tenure, 3), 0.85, clamp(0.5 + 2.5*(life - baseline), 0, 1)) - fondness), 0, 1)" },
+    { "on": "polity", "set": "tenure", "expr": "tenure + 0.0833" }
+  ],
+  "events": [
+    { "on": "polity", "when": "lt(child_mean(fondness), 0.35)", "label": "the people rise up — the regime falls",
+      "do": [
+        { "op": "set", "stat": "tenure", "expr": "0" },
+        { "op": "add", "stat": "regime", "expr": "1" }
+      ] }
+  ]
+}

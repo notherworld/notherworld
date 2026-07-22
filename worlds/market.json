@@ -1,0 +1,61 @@
+{
+  "_note": "THE RELIC MARKET — a pure-data probe of N-WAY CONTESTED SIMULTANEITY, the last flagged edge. Every ~6 ticks the auction house produces ONE relic; six traders all want it, same tick, same claim. HYPOTHESIS: sequential in-tick resolution means the LOWEST-ID trader wins every single contest (deterministic priority = a fairness pathology for 'simultaneous' contention). TEST A (this file, eager=1): everyone grabs every tick — measure the winner spread in the chronicle. TEST B (set stagger to chance-gated): each trader only reaches for it some ticks — does the spread de-bias? If yes, fairness under contention is a DATA pattern, not a missing prim.",
+
+  "rng_seed": 5,
+
+  "seed": [
+    { "kind": "house", "name": "the Vellum Exchange", "reveal": true }
+  ],
+
+  "generators": [
+    { "on": "house", "spawn": "trader", "count": "6",
+      "child_stats": {
+        "keen":   "0.35 + 0.5*rand(1)",
+        "wins":   "0",
+        "celebrated": "0"
+      }
+    },
+    { "on": "house", "spawn": "auctioneer", "count": "1",
+      "_sentinel_note": "child_* aggregators have NO kind filter (same asymmetry as here_*) — the fairness events below want min/max over TRADERS only, so every non-trader carries a sentinel trophies=999 to stay out of child_min's way. Composes, but it is the third world to hit kind-filterless aggregation.",
+      "child_stats": { "clock": "5", "trophies": "999" } }
+  ],
+
+  "rules": [
+    { "on": "auctioneer", "set": "clock", "expr": "clock + 1" },
+    { "on": "relic", "set": "shine", "expr": "1" },
+    { "on": "relic", "set": "trophies", "expr": "999" },
+    { "on": "trader", "set": "bid", "expr": "rand(7)" },
+    { "on": "trader", "set": "holding", "expr": "edge_count(prize)" }
+  ],
+
+  "actions": [
+    { "on": "relic", "name": "go_to_the_highest_bidder",
+      "_note": "TEST C — the pick-link prim: the RELIC selects its owner, the argmax of a fresh per-tick bid (keen*rand). Contention resolves by MERIT+DICE, not entity id. This inversion (the contested thing chooses) is the fair-auction pattern.",
+      "score": "lt(edge_count(prize),1) * 1.0",
+      "effects": [ { "op": "link", "stat": "prize:trader@max:target.bid" } ]
+    },
+    { "on": "trader", "name": "bank_the_relic",
+      "_note": "release the prize so contention REPEATS: mark it banked (it despawns itself), drop the edge, count the trophy. claim is 1:1 both ways — a holder can't claim again until they release.",
+      "score": "ge(edge_count(prize),1) * 3",
+      "effects": [ { "op": "affect_set", "stat": "prize:banked", "expr": "1" },
+                   { "op": "unlink", "stat": "prize" },
+                   { "op": "add", "stat": "trophies", "expr": "1" } ]
+    },
+    { "on": "trader", "name": "haggle_idly",
+      "score": "0.1",
+      "effects": [] }
+  ],
+
+  "events": [
+    { "on": "auctioneer", "when": "gt(clock, 5)", "label": "🔔 the auctioneer unveils a fresh relic",
+      "do": [ { "op": "spawn", "stat": "relic", "expr": "relic" }, { "op": "set", "stat": "clock", "expr": "0" }, { "op": "add", "stat": "served", "expr": "1" } ] },
+    { "on": "relic", "when": "gt(banked, 0.5)", "label": "the relic disappears into a private vault",
+      "do": [ { "op": "despawn" } ] },
+    { "on": "trader", "when": "gt(trophies, celebrated)", "label": "🏆 snatches the relic from six reaching hands",
+      "do": [ { "op": "set", "stat": "celebrated", "expr": "trophies" } ] },
+    { "on": "house", "when": "gt(child_min(trophies), 0.5)", "label": "⚖ every trader has won at least once — a fair floor",
+      "do": [] },
+    { "on": "house", "when": "gt(child_max(served), 30) * lt(child_min(trophies), 0.5)", "label": "⚠ 30 relics gone and someone has NOTHING — an unfair floor",
+      "do": [] }
+  ]
+}

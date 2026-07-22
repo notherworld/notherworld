@@ -1,0 +1,31 @@
+{
+  "_note": "BREAK-PROBE: targeted interaction. TWO questions. (A) WEIGHTED targeting — 'help the neediest kin most' — SHOULD already work: affect hits all neighbors but the value reads target.X, so weak targets get more. (B) SINGLE-BEST targeting — 'act on ONLY my weakest rival' — suspected GAP: affect hits ALL neighbors, link/claim pick random/scan, nothing selects an argmin/argmax peer to act on alone. We test A works and probe whether B is really needed or if weighting covers it.",
+  "rng_seed": 4,
+  "seed": [
+    { "kind": "band", "name": "Band", "reveal": true, "stats": {} }
+  ],
+  "generators": [
+    { "on": "band", "spawn": "member", "count": "5",
+      "child_stats": { "hp": "0.2 + 0.7*rand(1)", "care": "0.3 + 0.6*rand(2)", "bonded": "0" } }
+  ],
+  "actions": [
+    { "on": "member", "name": "make_bond",
+      "score": "care*lt(edge_count(ally),3)*0.6",
+      "effects": [ { "op": "link", "stat": "ally:member" } ]
+    },
+    { "on": "member", "name": "tend_the_hurt",
+      "score": "care*gt(edge_count(ally),0)*0.8",
+      "effects": [
+        { "op": "affect", "stat": "ally:hp", "expr": "0.08*(1 - target.hp)*gt(hp,0.4)" }
+      ]
+    },
+    { "on": "member", "name": "rest",
+      "score": "0.3",
+      "effects": [ { "op": "add", "stat": "hp", "expr": "0.02" } ]
+    }
+  ],
+  "rules": [
+    { "on": "member", "set": "hp", "expr": "clamp(hp - 0.03, 0, 1)" }
+  ],
+  "events": []
+}

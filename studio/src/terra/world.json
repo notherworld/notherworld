@@ -1,0 +1,601 @@
+{
+  "_note": "VERANHOLM — a living city dived through the scope tree, rendered top-down at every scale. city > district > block > building > floor > room > occupant. LAZY: each level materializes on reveal (walk into any building). Building TYPE is real data (use_roll → doctor/shop/residential/school/cafe/office in the renderer). Occupants MOVE between rooms: each floor chains its rooms with a `door` edge, and occupants `move` along it + mingle with whoever is co-located. Nothing exists until observed; folds back when you leave.",
+
+  "rng_seed": 20,
+
+  "_natural_detail_note": "LOD DETAIL FIELDS (wooded/grassy/dry, inside `fields`) — the same two-axis logic (form × where) that drives biomes, one level finer. They say WHERE small natural features want to sit; the block→grove/deadpatch generators scatter entities onto them (where-gated), so the detail at block zoom is CONTINUOUS with the biome seen from region zoom — a forest block sprouts groves, a dry fringe shows dead grass. Pure region algebra; the engine never knows what a tree is. (Note lives OUTSIDE `fields` — every key inside `fields` is parsed as a formula, and an em-dash in a formula is a lex error.)",
+  "_fields_note": "LAYERED WORLD as composed fields (region algebra). TWO INDEPENDENT AXES, both pure data: (1) TERRAIN FORM — what the land IS (water/beach/grass/forest/desert/rock/snow), from elevation + an independent low-frequency `moisture` field; (2) BUILDABILITY — can you build here. These are DECOUPLED on purpose: a forest or a desert is BUILDABLE (you clear trees / build on sand), but steep rock, high mountains, snow and water are NOT. So 'unbuildable' always has a visible reason on the map. Biome noise is LOW-FREQUENCY (big scale) → coherent contiguous regions, never salt-and-pepper. The engine only composes regions; it never knows what a 'forest' means.",
+  "fields": {
+    "elevation": "clamp(noise(fx,fy)*0.6 + 0.35 - 0.7*sqrt((fx-0.95)*(fx-0.95)+(fy-0.9)*(fy-0.9))*lt(sqrt((fx-0.95)*(fx-0.95)+(fy-0.9)*(fy-0.9)),0.55) + (noise(fx*8+91.3,fy*8+91.3)-0.5)*0.14*clamp((noise(fx,fy)*0.6+0.35-0.68)*5,0,1), 0, 1)",
+    "water":     "lt(field(elevation,fx,fy), 0.4)",
+    "land":      "not(field(water,fx,fy))",
+    "land_elev": "max(field(elevation,fx,fy), 0.4)",
+    "steep":     "gt(abs(field(land_elev,fx+0.03,fy)-field(land_elev,fx-0.03,fy)) + abs(field(land_elev,fx,fy+0.03)-field(land_elev,fx,fy-0.03)), 0.12)",
+    "shore":     "and(field(land,fx,fy), near(water, 0.05))",
+    "shallows":  "and(field(water,fx,fy), near(land, 0.03))",
+    "beach":     "and(field(shore,fx,fy), not(field(steep,fx,fy)))",
+    "cliff":     "and(field(shore,fx,fy), field(steep,fx,fy))",
+    "moisture":  "noise(fx*1.4+31.7, fy*1.4+31.7)",
+    "temp":      "clamp(1.0 - field(elevation,fx,fy)*0.9, 0, 1)",
+    "cloud":     "clamp((noise(fx*2.2+57.4, fy*2.2+57.4)-0.35)*1.7 + field(moisture,fx,fy)*0.25 + field(elevation,fx,fy)*0.20, 0, 1)",
+    "cragged":   "gt(abs(field(land_elev,fx+0.03,fy)-field(land_elev,fx-0.03,fy)) + abs(field(land_elev,fx,fy+0.03)-field(land_elev,fx,fy-0.03)), 0.22)",
+    "snow":      "and(field(land,fx,fy), gt(field(elevation,fx,fy), 0.88))",
+    "rock":      "and(field(land,fx,fy), and(not(field(snow,fx,fy)), or(field(cragged,fx,fy), gt(field(elevation,fx,fy), 0.80))))",
+    "gentle":    "sub(sub(sub(field(land,fx,fy), field(rock,fx,fy)), field(snow,fx,fy)), field(shore,fx,fy))",
+    "forest":    "and(field(gentle,fx,fy), gt(field(moisture,fx,fy), 0.56))",
+    "desert":    "and(field(gentle,fx,fy), and(lt(field(moisture,fx,fy), 0.38), lt(field(elevation,fx,fy), 0.62)))",
+    "buildable": "sub(sub(field(land,fx,fy), field(rock,fx,fy)), field(snow,fx,fy))",
+    "wooded":    "and(field(gentle,fx,fy), gt(field(moisture,fx,fy), 0.5))",
+    "grassy":    "and(field(gentle,fx,fy), and(le(field(moisture,fx,fy), 0.5), ge(field(moisture,fx,fy), 0.3)))",
+    "dry":       "and(field(gentle,fx,fy), lt(field(moisture,fx,fy), 0.34))",
+    "steeper":         "gt(abs(field(land_elev,fx+0.015,fy)-field(land_elev,fx-0.015,fy)) + abs(field(land_elev,fx,fy+0.015)-field(land_elev,fx,fy-0.015)), 0.08)",
+    "buildable_block": "sub(sub(field(buildable,fx,fy), near(water, 0.018)), field(steeper,fx,fy))",
+    "plot_land":       "sub(field(buildable_block,fx,fy), road_near(0.005))",
+    "near_road":       "road_near(0.03)",
+    "on_road":         "road_near(0.008)"
+  },
+  "_plot_land_note": "ROADS vs PLOTS — this is SUBTRACTION, not fronting. `plot_land` = buildable_block MINUS a band around every road (`road_near`), so buildings simply can't overlap a lane; plots carve from what's left. This is the SUBURBAN/RURAL form (houses avoid the road, scatter on remaining land). The CITY form is different — there plots would FRONT the road (setback + a frontage row along the street, interior lots behind), which is a stronger 'plots orient to the road' rule NOT built yet. Both are authorable as data (the engine subtracts roads via road_near; fronting would be a future partition option that reads 'which road do I face'). Kept subtraction as the base on purpose — city vs suburb is a DEV's choice, not a baked-in law. road_near width (0.014) = the corridor half-tuning; widen for wider streets.",
+  "_buildable_block_note": "THE FINER RULE (scope decision, no engine change): building plots sit on a STRICTER mask than blocks do — `buildable_block` = buildable MINUS a coast setback (`near(water,0.035)`) MINUS a stricter local slope (`steeper`), so lots read as tight urban plots set back from the water, not 'anywhere on land'. Pure region algebra; sampled through the BLOCK's fractal patch, so the setback is measured against THIS block's real coastline at every seed — one formula, correct everywhere. Authoring MEANING; the engine only composes the regions. (NOTE: comment keys must live OUTSIDE `fields` — every key inside `fields` is parsed as a formula.)",
+
+  "_routes_note": "City districts are VORONOI (organic territory), so they need real terrain-aware ROADS routed between them (around water, bridging). Districts route LANES between blocks (the arteries passing through). But BUILDINGS are not routed: the block→building `street` route was REMOVED on purpose — it double-drew a road network buildings had to dodge. Inside a block, circulation is EMERGENT: plots carve from `plot_land` (buildable minus the through-lanes via `road_near`), and the GAPS between the subdivide plots ARE the local streets. Construction determines block roads, not a separate routing pass. Two directions of causality: ABOVE the block road→land (artery cuts buildable); INSIDE the block land→road (plots make streets).",
+  "routes": [
+    { "on": "city", "node": "district", "hub": "eq(ring,0)", "route": "road",
+      "x": "cx", "y": "cy", "style": "organic", "redundancy": 4,
+      "cost": "1 + 8*field(water, fx, fy) + 6*field(steep, fx, fy) + 12*field(rock, fx, fy)",
+      "transition": "field(water, fx, fy)", "max_span": 0.3, "trans_kind": "bridge" },
+
+    { "_note": "FRACTAL CIRCULATION: `gates:true` includes the crossing points the CITY road left on this district (engine `gate` children) as lane nodes — so the lane web CONNECTS to the artery where it enters, instead of overlaying it blindly. The lanes are the ARTERIES that pass through blocks — they get subtracted from block plot_land (a building can't sit on a lane). ROAD-HIERARCHY REWARD: the `- 6*road_near(0.02)` term makes a hop CHEAPER when it runs along an EXISTING road (the city artery, laid before this pass) — so a lane prefers to ride the highway corridor and peel off, instead of cutting its own parallel line. That's the on-ramp/exit read: local roads use the artery as a connector, not a thing to duplicate. Clamped ≥0.05 so cost never goes negative (Dijkstra needs positive edges).",
+      "on": "district", "node": "block", "hub": "busy", "route": "lane",
+      "x": "bx", "y": "by", "style": "organic", "redundancy": 2,
+      "cost": "max(0.05, 1 + 8*field(water, fx, fy) + 5*field(steeper, fx, fy) + 10*field(rock, fx, fy) - 6*road_near(0.02))", "gates": true },
+
+    { "_path_note": "★ BLOCK CONNECTING PATHS with ROAD HIERARCHY (founder: 'a road connecting house A to house B should route from A, SEE the highway, take an exit further down, then reach B — use highways as connection points, not merge into them'). Two data levers do this, no engine change: (1) `gates: true` pulls the artery/lane crossing points into the path net as nodes, so a path can JOIN the bigger road at a real access point; (2) the strong `- 9*road_near(0.015)` reward makes travelling ALONG an existing road far cheaper than cutting a fresh line, so Dijkstra routes A → nearest road → rides it → exits near B. redundancy 1 (was 2) = one honest connection per plot, so roads don't run 50%-overlapped in the same direction (real roads run parallel only occasionally, never half-tracing each other). Clamped ≥0.05 so edges stay positive.",
+      "on": "block", "node": "building", "hub": "built", "route": "path",
+      "x": "x", "y": "y", "style": "organic", "redundancy": 1, "gates": true,
+      "cost": "max(0.05, 1 + 10*field(water, fx, fy) + 6*field(steeper, fx, fy) + 8*field(rock, fx, fy) - 11*road_near(0.018))" }
+  ],
+
+  "_templates_note": "THE TEMPLATE LAYER — captured compositions, not new machinery. A template is a generator FRAGMENT deep-merged under any generator that names it (the generator's own keys win; nested objects merge). The loader expands it before the engine ever looks; the engine only sees prims. `carved_lots` = the proven 'tile the buildable land honestly' recipe (mask-aware subdivide carve, clipped to the coast) — EXTRACTED from the block and building generators below, which now share it. A dev could define `alien_hive` the same way; nothing here knows what a lot is.",
+  "templates": {
+    "carved_lots": {
+      "partition": { "style": "subdivide", "clip": "field(buildable, fx, fy)" }
+    },
+    "_carved_urban_lots_note": "SAME carve recipe, STRICTER land: building plots tile `buildable_block` (buildable minus a coast setback minus steeper slope) instead of raw buildable — so buildings sit on tight urban lots set back from the water. Only the clip field differs; the machinery is identical. A dev picks the mask, the engine carves it.",
+    "carved_urban_lots": {
+      "partition": { "style": "subdivide", "clip": "field(buildable_block, fx, fy)" }
+    },
+    "_carved_plot_lots_note": "THE ROAD/PLOT RECONCILIATION (founder: 'how can you plop a building OVER a road?'). Building plots carve from `plot_land` = buildable_block MINUS the district ARTERIES running through the block (`road_near`). The through-roads are cut OUT of the land, so nothing builds on them; the GAPS between the remaining subdivide plots ARE the local streets (construction determines block roads — no separately-routed block street network, that double-drew roads fighting the plots). Two directions of causality: ABOVE the block road→land (artery cuts buildable); INSIDE the block land→road (plots make streets).",
+    "carved_plot_lots": {
+      "partition": { "style": "subdivide", "clip": "field(plot_land, fx, fy)" }
+    }
+  },
+
+  "seed": [
+    { "kind": "city", "name": "Veranholm", "reveal": true,
+      "stats": { "heat": 0.2, "wealth": 0.5, "hour": 8, "day": 0, "is_night": 0, "is_work": 1 } }
+  ],
+
+  "generators": [
+    { "on": "city", "spawn": "district", "count": "7",
+      "partition": { "style": "voronoi", "edge": "border", "x": "cx", "y": "cy",
+        "where": "field(buildable, fx, fy)", "clip": "field(buildable, fx, fy)",
+        "coverage": {
+          "beach":  "field(beach, fx, fy)",
+          "cliff":  "field(cliff, fx, fy)",
+          "shore":  "field(shore, fx, fy)",
+          "hill":   "gt(field(elevation, fx, fy), 0.68)",
+          "wooded": "field(wooded, fx, fy)",
+          "grassy": "field(grassy, fx, fy)",
+          "dry":    "field(dry, fx, fy)",
+          "rock":   "or(field(rock, fx, fy), field(steeper, fx, fy))"
+        } },
+      "_child_stats_note": "child_stats evaluate TOP-TO-BOTTOM against the child, so later formulas read earlier stats by name (angle/radius/spread → cx/cy → elev). No repeated sub-expressions.",
+      "child_stats": {
+        "angle":     "index * 2 * pi() / 7 + 0.18*rand(9)",
+        "ring":      "iff(eq(index,0), 0, 1)",
+        "radius":    "iff(eq(index,0), 0, 0.82 + 0.12*rand(1))",
+        "spread":    "0.62 + 0.14*rand(1)",
+        "cx":        "0.5 + radius * cos(angle) * 0.5",
+        "cy":        "0.5 + radius * sin(angle) * 0.5",
+        "density":   "iff(eq(index,0), 0.95, clamp(0.75 - 0.5*spread + 0.15*rand(2), 0.15, 1))",
+        "heat":      "iff(eq(index,0), 0.7 + 0.2*rand(3), clamp(0.5 - 0.4*spread + 0.2*rand(3), 0.05, 0.9))",
+        "wealth":    "clamp(0.25 + 0.55*spread + 0.15*(rand(4)-0.5), 0.1, 0.95)",
+        "character": "rand(5)",
+        "elev":      "field(elevation, cx, cy)",
+        "cloud_density": "field(cloud, cx, cy)",
+        "raining":       "0"
+      }
+    },
+
+    { "on": "district", "spawn": "block", "count": "4 + density*4",
+      "_treatment": "THE CITY TREATMENT (the missing middle level): a district partitions into BLOCKS that HONESTLY tile its buildable land — Voronoi seeds scattered ON the land (`where`), cells clipped to the coast (`clip`), same recipe as districts. Contiguous land-following parcels, no overlap. Local STREETS route between them. A district is a small city.",
+      "template": "carved_lots",
+      "partition": { "edge": "adjacent", "x": "bx", "y": "by", "weight": "parcel" },
+      "child_stats": {
+        "parcel":   "1 + floor(rand(6)*rand(6)*5)",
+        "wealth":   "parent.wealth + 0.15*(rand(1)-0.5)",
+        "mix":      "clamp(0.5 + 0.5*parent.hill_frac - 0.7*parent.shore_frac + 0.2*(rand(2)-0.5), 0, 1)",
+        "busy":     "clamp(0.3 + 0.4*parent.shore_frac + 0.3*parent.heat + 0.3*rand(3), 0, 1)"
+      }
+    },
+
+    { "on": "block", "spawn": "building", "count": "clamp(floor(1 + area*38 + busy*2), 1, 12)",
+      "_count_note": "BUILDING COUNT ∝ the block's real LAND (`area` = carved buildable fraction). Because the carve splits the land among exactly `count` lots, fewer count = BIGGER lots — so this is ALSO the min-lot-size lever (founder: 'improve min size'). area*65: a sliver block (area~0.02) → ~2 big buildings, a roomy block (area~0.1) → ~8. + a small busy nudge. Clamped 1..14. Raise the 65 for finer grain / more smaller lots, lower it for fewer bigger lots.",
+      "_treatment": "THE CITY TREATMENT, ONE SCALE DOWN: buildings are PLOTS that honestly tile the block's PLOT land (`carved_plot_lots` clips to `plot_land` = buildable_block minus the district arteries running through — so buildings never sit on a road, and the gaps between plots ARE the local streets). Same partition prim as districts — a block is a smaller city, resolved through its own world patch automatically. The carve writes each plot's real land fraction to `area` (see the `footprint` rule below — building SIZE ⊕ its honest lot).",
+      "template": "carved_plot_lots",
+      "partition": { "edge": "abut", "x": "px", "y": "py", "weight": "prominence" },
+      "child_stats": {
+        "prominence":"1 + floor(rand(6)*rand(6)*7)",
+        "floors":    "1 + rand(1)*rand(1)*7",
+        "wealth":    "parent.wealth + 0.15*(rand(2)-0.5)",
+        "use_roll":  "iff(lt(parent.mix,0.4), 0.7 + 0.3*rand(3), rand(4))",
+        "occupancy": "0.4 + 0.5*rand(5)"
+      }
+    },
+
+    { "_person_note": "★ PEOPLE (TEMPLATE #2 — person + schedule). Spawned at BLOCK level so they populate the street you dive into (parallel to buildings). No cascade: a person is Coarse until its block is the focus, but is_active() only checks ANCESTORS — so when you dive to this block (city→district→block all Detailed) its people come alive and live their day; fold the block and they freeze. That's the LOD bargain applied to citizens. ONE person kind (the engine doesn't know what a 'being' is — a dev's enemies/NPCs are just entities with different stats); `resident` is a TAG, not a separate kind. Count ∝ the block's real land + busyness, roughly tracking its homes. The room `occupant` (deeper) stays as interior-zoom detail until movement/rendering unifies them. Renders once the pawn pass lands; testable now via worlds/citylife.json.",
+      "on": "block", "spawn": "person",
+      "count": "clamp(floor(2 + area*22 + busy*3), 1, 12)",
+      "child_stats": {
+        "resident": "1",
+        "energy":   "0.45 + 0.4*rand(1)",
+        "hunger":   "0.1 + 0.3*rand(2)",
+        "social":   "0.3 + 0.4*rand(3)",
+        "money":    "0.4 + 0.4*parent.wealth",
+        "wage":     "0.12 + 0.1*rand(4) + 0.1*parent.wealth",
+        "food":     "0.8",
+        "fun":      "0.5",
+        "at":       "0",
+        "hx":       "0.12 + 0.76*rand(5)",
+        "hy":       "0.12 + 0.76*rand(6)",
+        "jx":       "0.12 + 0.76*rand(7)",
+        "jy":       "0.12 + 0.76*rand(8)",
+        "px":       "hx",
+        "py":       "hy",
+        "spd":      "0.04 + 0.03*rand(9)",
+        "diligence":"0.15 + 0.8*rand(10)",
+        "commute":  "sqrt((jx-hx)*(jx-hx)+(jy-hy)*(jy-hy))",
+        "leave_h":  "9 - (commute/spd)*0.25 - (diligence - 0.4)*1.6"
+      }
+    },
+
+    { "_venue_note": "★ VENUES (templates #3 + #4). Draw-places on the block's nightlife — count ∝ how busy the block is, so quiet residential blocks may have none and lively ones a few. Each carries its own EVOLVING reputation (`appeal`, starts with a small random spread so no two are identical, then drifts with performance via the rule) plus a nightly hidden food_quality and a stock of mains that depletes when packed. The person head_out/stay_out actions and the venue rules/events make the emergent nightlife proven in citylife (busy-feedback, word-of-mouth, run-dry migration). Active only while the block is Detailed (dived) — LOD-honest.",
+      "on": "block", "spawn": "venue",
+      "count": "clamp(floor(busy*3.5), 0, 3)",
+      "child_stats": {
+        "kind_of":      "index",
+        "open_from":    "17",
+        "open_to":      "24",
+        "appeal":       "0.66 + 0.18*rand(8)",
+        "is_open":      "1",
+        "appeal_now":   "0.75",
+        "crowd":        "0",
+        "cap":          "clamp(floor(4 + busy*6), 4, 12)",
+        "stock":        "6",
+        "food_quality": "0.5",
+        "served":       "0.5",
+        "word":         "0.5",
+        "vx":           "0.12 + 0.76*rand(9)",
+        "vy":           "0.12 + 0.76*rand(10)"
+      }
+    },
+
+    { "_natural_note": "★ NATURAL DETAIL ON REVEAL — the LOD payoff. When you DIVE INTO a block, the land itself opens into features, not just buildings. A `grove` is a real child entity (like a building): cx/cy start as random scatter, then the partition's `where` gate PULLS each grove onto WOODED ground, sampled through the block's OWN patch (fractal) — so groves land exactly where the forest biome is inside this block. count ∝ how forest-y the DISTRICT is (parent.wooded_frac) × this block's real land (area). We read the DISTRICT's fraction, not the block's, ON PURPOSE: coverage runs at the district carve (voronoi+clip), whereas the block is a subdivide carve that skips coverage AND whose settle runs AFTER this generator — so the district value is the one that's actually populated when this fires (verified against write_canon order). Frozen to canon at reveal: deterministic per seed, persistent — the same trees every time you return. CASCADE: true → each grove immediately reveals its own trees (below), so at block zoom a grove resolves into REAL INDIVIDUAL TREES, not a blob. `capacity` seeds how many trees the grove holds; the grove's live stats then ROLL UP from those trees (see rollups) — chop a tree and the grove thins by itself.",
+      "on": "block", "spawn": "grove", "cascade": true,
+      "count": "clamp(floor(parent.wooded_frac * area * 260 + parent.wooded_frac*3), 0, 22)",
+      "child_stats": {
+        "cx":       "rand(1)",
+        "cy":       "rand(2)",
+        "size":     "0.45 + 0.5*rand(3)",
+        "vigor":    "clamp(0.7 + 0.3*rand(4) - 0.5*parent.dry_frac, 0.2, 1)",
+        "capacity": "floor(3 + size*9)",
+        "wx0":      "parent.wx0",
+        "wy0":      "parent.wy0",
+        "wx1":      "parent.wx1",
+        "wy1":      "parent.wy1"
+      },
+      "partition": { "style": "voronoi", "edge": "near", "x": "cx", "y": "cy",
+        "where": "field(wooded, fx, fy)" }
+    },
+
+    { "_tree_note": "★★ INDIVIDUAL TREES — the finest terrain LOD, and REAL ENTITIES so the sim can act on them. Each tree is a child of its grove, scattered in a small radius AROUND the grove's world position (parent.cx/cy are FINAL here — the grove's where-relocation ran before this cascade-reveal). A tree carries `health`, `age`, `species`. Because trees are entities, `despawn` on a tree = CHOP IT DOWN: the grove's rollups (below) re-aggregate next tick, so tree_n drops, density falls, and the grove can die when its last tree is gone — deforestation as pure data, no special case. The renderer draws each tree as a real trunk+crown stamp at block zoom; count/health of the grove are just its trees summed.",
+      "on": "grove", "spawn": "tree", "count": "max(1, capacity)",
+      "child_stats": {
+        "spin":    "index * 2.399963",
+        "ring":    "0.12 + 0.5*size*sqrt(rand(1))",
+        "cx":      "clamp(parent.cx + ring*cos(spin), 0.02, 0.98)",
+        "cy":      "clamp(parent.cy + ring*sin(spin), 0.02, 0.98)",
+        "wx":      "parent.wx0 + cx*(parent.wx1 - parent.wx0)",
+        "wy":      "parent.wy0 + cy*(parent.wy1 - parent.wy0)",
+        "species": "floor(rand(2)*3)",
+        "age":     "0.3 + 0.7*rand(3)",
+        "health":  "clamp(parent.vigor + 0.2*(rand(4)-0.5), 0.15, 1)",
+        "alive":   "1"
+      }
+    },
+
+    { "_deadgrass_note": "★ DEAD-GRASS PATCHES — the same mechanism for decay/dryness. Scattered onto the block's DRY / parched-grassy land (where-gated to `dry` OR `grassy`), count ∝ the district's dry+grassy character (parent.*_frac, populated at the district carve). Wealthy blocks tend their land, so `wealth` trims the count — a data lever, not a renderer hack. Each patch is a child entity with a `size`; the renderer tints those cells toward a sere yellow-brown. Reads as 'this corner has gone to seed', straight from the moisture field one scale finer.",
+      "on": "block", "spawn": "deadpatch", "count": "clamp(floor((parent.dry_frac + 0.5*parent.grassy_frac) * area * 200 * (1.1 - 0.4*wealth)), 0, 16)",
+      "child_stats": {
+        "cx":   "rand(5)",
+        "cy":   "rand(6)",
+        "size": "0.4 + 0.55*rand(7)"
+      },
+      "partition": { "style": "voronoi", "edge": "near", "x": "cx", "y": "cy",
+        "where": "or(field(dry, fx, fy), field(grassy, fx, fy))" }
+    },
+
+    { "_boulder_note": "★ BOULDERS — the COMPLEMENT to trees: features claim DIFFERENT terrain. Trees take the woods; boulders take the bare ROCK and STEEP slopes where trees can't grow (where-gated to rock OR steeper). Fills the grey mountain ground that read as empty. Count ∝ how craggy the district is (a rock_frac coverage on the district) × block land. A boulder is a single scatter entity (no children — a rock isn't a forest); the renderer stamps a grey stone with a lit facet. Proves the SAME scatter recipe generalizes to the opposite biome — the demo's whole pitch.",
+      "on": "block", "spawn": "boulder", "count": "clamp(floor(parent.rock_frac * area * 220), 0, 18)",
+      "child_stats": {
+        "cx":    "rand(11)",
+        "cy":    "rand(12)",
+        "size":  "0.4 + 0.6*rand(13)",
+        "shade": "rand(14)"
+      },
+      "partition": { "style": "voronoi", "edge": "near", "x": "cx", "y": "cy",
+        "where": "or(field(rock, fx, fy), field(steeper, fx, fy))" }
+    },
+
+    { "_bloom_note": "★ WILDFLOWER PATCHES — a PATCH entity (like deadgrass), NOT counted flowers: one bloom patch, the renderer stipples colourful dabs WITHIN it. Scattered on grassy meadow (where-gated to grassy). Count ∝ the district's grassy character, and WEALTH raises it (tended land blooms; the same meaning→looks lever, opposite sign from deadgrass). `hue` picks the patch's flower colour family so different meadows bloom differently.",
+      "on": "block", "spawn": "bloom", "count": "clamp(floor((parent.grassy_frac + 0.25) * area * 140 * (0.7 + 0.6*wealth)), 0, 12)",
+      "child_stats": {
+        "cx":   "rand(15)",
+        "cy":   "rand(16)",
+        "size": "0.4 + 0.5*rand(17)",
+        "hue":  "floor(rand(18)*4)"
+      },
+      "partition": { "style": "voronoi", "edge": "near", "x": "cx", "y": "cy",
+        "where": "and(field(gentle, fx, fy), not(field(wooded, fx, fy)))" }
+    },
+
+    { "_reed_note": "★ REEDS — thin marsh growth at the WATER'S EDGE, on the shore/beach band you can now see at block zoom. where-gated to `beach` (calm shore, not cliff). A reed clump is a scatter entity; the renderer draws a few vertical strokes. Finishes the shore transition — land → reeds → shallows → water.",
+      "on": "block", "spawn": "reed", "count": "clamp(floor(parent.shore_frac * area * 260), 0, 16)",
+      "child_stats": {
+        "cx":   "rand(21)",
+        "cy":   "rand(22)",
+        "size": "0.4 + 0.6*rand(23)"
+      },
+      "partition": { "style": "voronoi", "edge": "near", "x": "cx", "y": "cy",
+        "where": "field(beach, fx, fy)" }
+    },
+
+    { "_riverrock_note": "★ RIVER ROCKS — small stones IN the shallow water at the land's edge (where-gated to `shallows` = water near land). Unlike trees, rocks DO belong in water — they break up the flat blue channels the eye follows. A scatter entity; the renderer stamps a small wet stone that sits ON the animated water (marked so the water doesn't overpaint it).",
+      "on": "block", "spawn": "riverrock", "count": "clamp(floor(parent.shore_frac * area * 180), 0, 14)",
+      "child_stats": {
+        "cx":   "rand(24)",
+        "cy":   "rand(25)",
+        "size": "0.35 + 0.4*rand(26)"
+      },
+      "partition": { "style": "voronoi", "edge": "near", "x": "cx", "y": "cy",
+        "where": "field(shallows, fx, fy)" }
+    },
+
+    { "on": "building", "spawn": "floor", "count": "max(1, floors)",
+      "child_stats": {
+        "level":     "index",
+        "wealth":    "parent.wealth",
+        "use_roll":  "parent.use_roll",
+        "use":       "parent.use",
+        "public":    "lt(index,0.5)"
+      }
+    },
+
+    { "_room_note": "ROOM COUNT scales with the building's CLASS and wealth — a home is 3-6 rooms, a shop floor is fewer/larger (retail + back), an office is an open count. `use` threads down so the interior renderer knows the class. door-chained: the engine's real adjacency the occupants walk.",
+      "on": "floor", "spawn": "room", "count": "clamp(2 + wealth*3 + eq(use,0)*1 - eq(use,1)*1, 1, 7)", "chain": "door",
+      "child_stats": {
+        "size":      "0.4 + 0.5*rand(1)",
+        "warmth":    "0.3 + 0.5*rand(2)",
+        "use_roll":  "parent.use_roll",
+        "use":       "parent.use",
+        "occupied":  "chance(0.75)"
+      }
+    },
+
+    { "_decor_note": "★ PROCEDURAL DECOR AS LAZY CANON (founder: 'procedural decor entities — until observed, then canon'). Decor spawns when its ROOM is first REVEALED (walk in / open the floor) — before that the room is only an idea; after, the furniture is a written fact, same pieces every revisit. `type` picks from the class's furniture set (renderer maps use×type → stamp); dx/dy are room-local placement the renderer respects. Count scales with room size.",
+      "on": "room", "spawn": "decor", "count": "clamp(1 + floor(size*4), 1, 5)",
+      "child_stats": {
+        "type": "floor(rand(1)*6)",
+        "dx":   "0.15 + 0.7*rand(2)",
+        "dy":   "0.15 + 0.7*rand(3)",
+        "use":  "parent.use"
+      }
+    },
+
+    { "on": "room", "spawn": "occupant", "count": "occupied",
+      "child_stats": {
+        "mood":     "0.4 + 0.4*rand(1)",
+        "energy":   "0.4 + 0.5*rand(2)",
+        "sociable": "0.2 + 0.7*rand(3)",
+        "restless": "0.2 + 0.6*rand(4)"
+      }
+    }
+  ],
+
+  "coarse_rules": [
+    { "on": "district", "set": "heat",
+      "expr": "clamp(heat + 0.012*(edge_mean(border, heat) - heat), 0, 1)" }
+  ],
+
+  "rules": [
+    { "_clock_note": "★ THE CLOCK (TEMPLATE #1) — the one stat everything reads: schedules, venue hours, and the renderer's day/night grade all key off city.hour, so the sim and the render share ONE truth (per TEMPLATE_CATALOG §0). `on:city` runs EVERY tick at EVERY zoom — the city has no ancestors, so is_active() is always true (verified in world.rs) — so time flows whether you're at city view or dived into a room. RATE = 0.25 h/tick → a full day ≈ 96 ticks; raise it for faster days. Hour has no modulo in the DSL, so it wraps via the day-rollover EVENT below (the proven probe_time payday pattern: reset on the rising edge). is_night/is_work are derived here so any scope can gate on them once broadcast down.",
+      "on": "city", "set": "hour", "expr": "hour + 0.25" },
+    { "on": "city", "set": "is_night", "expr": "clamp(ge(hour,22) + lt(hour,6), 0, 1)" },
+    { "on": "city", "set": "is_work",  "expr": "gt(hour,8)*lt(hour,18)" },
+
+    { "on": "district", "set": "heat",
+      "expr": "clamp(heat + 0.012*(edge_mean(border, heat) - heat), 0, 1)" },
+    { "on": "occupant", "set": "mood",
+      "expr": "clamp(mood + 0.015*gt(energy,0.4) - 0.02*lt(energy,0.2) + 0.02*gt(here_count(),0)*sociable, 0, 1)" },
+    { "on": "occupant", "set": "energy",
+      "expr": "clamp(energy - 0.015 + 0.06*lt(energy,0.3), 0, 1)" },
+
+    { "_person_needs_note": "★ NEEDS DECAY (template #2, proven in worlds/citylife.json) — energy drains while awake, hunger climbs, social fades; the schedule actions replenish them. `food` = 1-hunger for readouts/HUD. These only run when the person's block is Detailed (dived) — the LOD bargain.",
+      "on": "person", "set": "energy", "expr": "clamp(energy - 0.015, 0, 1)" },
+    { "on": "person", "set": "hunger", "expr": "clamp(hunger + 0.02, 0, 1)" },
+    { "on": "person", "set": "social", "expr": "clamp(social - 0.012, 0, 1)" },
+    { "on": "person", "set": "food",   "expr": "1 - hunger" },
+    { "_fun_note": "★ FUN (templates #3/#4, proven in citylife) — while at a venue, your fun = the food you were SERVED (0.9) + the buzz of the COMPANY (0.1), both read via edge_mean over the guest edge; off the edge it decays. Feeds the venue's word AND your own stay-or-go, so a bad plate or a burnt-out room lowers fun and you drift off.",
+      "on": "person", "set": "fun",
+      "expr": "iff(gt(edge_count(guest),0), clamp(0.9*edge_mean(guest,served) + 0.1*clamp(0.14*edge_mean(guest,crowd),0,1), 0, 1), fun*0.85)" },
+
+    { "_walk_note": "★ WALKING (movement, respecting time) — the schedule (the `at` the actions set THIS tick) names WHERE you should be: at work → your job spot, out at a venue → that venue's spot (read through the guest edge), otherwise home. Then px/py step toward that target by `spd` each tick — actual travel, in data, no pathfinding: people flow to work by day, to the venues at night, home to sleep. The renderer draws the live px/py, so you watch the street fill and empty with the clock.",
+      "on": "person", "set": "tx",
+      "expr": "iff(eq(at,1), jx, iff(gt(edge_count(guest),0.5), edge_mean(guest,vx), hx))" },
+    { "on": "person", "set": "ty",
+      "expr": "iff(eq(at,1), jy, iff(gt(edge_count(guest),0.5), edge_mean(guest,vy), hy))" },
+    { "on": "person", "set": "px", "expr": "clamp(px + clamp(tx - px, 0 - spd, spd), 0, 1)" },
+    { "on": "person", "set": "py", "expr": "clamp(py + clamp(ty - py, 0 - spd, spd), 0, 1)" },
+    { "_dist_note": "live distance from where you ARE to your job — the actions read it to know whether you've arrived (earn) or still need to travel (commute).",
+      "on": "person", "set": "dist_job", "expr": "sqrt((jx-px)*(jx-px)+(jy-py)*(jy-py))" },
+
+    { "_venue_web_note": "★ VENUES (templates #3 + #4, the emergent nightlife proven in worlds/citylife.json + `dive`). is_open from the block's broadcast hour; crowd = guests linked now; served = food_quality while stock lasts then scraps; word = mean fun of who's here (info that only forms once people are in). appeal_now = a DYNAMIC reputation (`appeal`, evolves below) + word + a WORD-GATED crowd pull (a crowd only draws while it's having a good time, so a burnt-out room stops pulling → migration) + a noise floor outside is_open (no 0-vs-0 opening tie). REPUTATION drifts day by day: a busy venue whose guests have fun (word>0.5) climbs, a busy dud fades — so even the pecking order is emergent, not authored.",
+      "on": "venue", "set": "is_open", "expr": "ge(hour,open_from)*lt(hour,open_to)" },
+    { "on": "venue", "set": "crowd",   "expr": "edge_count(guest)" },
+    { "on": "venue", "set": "served",  "expr": "is_open*iff(gt(stock,0.5), food_quality, 0.05)" },
+    { "on": "venue", "set": "word",    "expr": "iff(gt(crowd,0.5), clamp(edge_mean(guest,fun),0,1), 0.5)" },
+    { "on": "venue", "set": "appeal",  "expr": "clamp(appeal + 0.003*(word - 0.5)*gt(crowd,0.5), 0.4, 1)" },
+    { "on": "venue", "set": "appeal_now", "expr": "0.5*rand(7) + is_open*(appeal + 1.0*word + 0.15*crowd*word)" },
+
+    { "on": "building", "set": "souls", "expr": "child_sum(souls) + child_count()" },
+    { "on": "district", "set": "life",  "expr": "child_count()" },
+
+    { "_vitality_note": "★ DISTRICT VITALITY (0..1) — the macro health that decides whether the whole district is being kept up. Starts healthy (an existing, living community) and stays high while the district thrives; drops when the place FAILS (a stat like heat/wealth collapsing, or an authored decline event). A district whose vitality craters loses upkeep across ALL its plots AT ONCE → people-sparse → work decays → buildings overgrow → plots revert. The failing-city → wilderness cascade, from one coarse dial. Gentle drift toward a wealth-driven target so a poor district is more fragile; wire an event to slam it to 0 to watch a district die. Runs coarse (per-tick, every LOD) so decline is real even at city zoom.",
+      "on": "district", "set": "vitality",
+      "expr": "clamp(iff(eq(vitality,0), 0.85, vitality) + 0.02*((0.55 + 0.45*wealth) - vitality), 0, 1)" },
+    { "_block_vitality_note": "vitality PROJECTED onto the block, because a BUILDING's parent is its BLOCK (building→block→district), so a building's `upkeep` rule reads `parent.vitality` = the BLOCK's copy. The block just mirrors its district's vitality down one level (parent.vitality here = the district's). One hop so the plot-level gate can read it as parent.vitality.",
+      "on": "block", "set": "vitality", "expr": "parent.vitality" },
+
+    { "_work_live_note": "★ THE LIVING PLOT (per-tick). `work` (0 wild → 1 fully worked) is SUSTAINED by occupancy and a healthy district, and DECAYS toward wild when neglected — nature reclaims unkept land. UPKEEP = is this plot occupied / its community alive: souls here, or the district still has life. When upkeep holds, work drifts UP to a sustain ceiling; with no upkeep it DECAYS, and the rate depends on `surface` (paved 0.004/tick resists longest, lawn 0.010, bare dirt 0.020 — concrete outlasts a mowed lawn outlasts turned dirt). This is why you can clear a plot, wander 800 miles, and return to find it overgrown; and why a district whose population fails goes people-sparse → buildings decay → plots revert, all from ONE stat. Deterministic, per-tick, no engine change — pure rule + rollup.",
+      "on": "building", "set": "work",
+      "expr": "clamp(work + iff(gt(upkeep,0.5), 0.05*(1 - work), 0 - (0.020 - 0.008*surface)), 0, 1)" },
+    { "_upkeep_note": "UPKEEP presence: is this plot's community keeping it up. CRITICAL LOD POINT: occupants aren't REVEALED at block zoom (floors/occupants materialize only on deeper dive — that's the whole LOD lever), so upkeep can NOT read revealed `souls`. It reads the plot's OWN `occupancy` (a settle stat: is this an inhabited plot of the existing community) gated by district vitality (`parent.vitality`, 0..1). So a lived-in plot in a healthy district is kept up (work holds, structure stands); an empty/frontier plot, or ANY plot once its district's vitality craters, loses upkeep → work decays → reclaim. The macro decline cascade lives in `vitality` (below), one dial dropping upkeep across every plot at once. This is upkeep at the COARSE scale — honest to the LOD, no occupant reveal required.",
+      "on": "building", "set": "upkeep",
+      "expr": "clamp(gt(capacity,0)*gt(occupancy,0.35)*ge(parent.vitality,0.4), 0, 1)" },
+    { "_standing_note": "★ DOES A STRUCTURE STAND (per-tick, live). Eligible (capacity>0) AND fully worked (work≥1) → a building stands and LATCHES up. If work later decays below a dilapidation floor (0.55), the structure can no longer be maintained → standing drops → the plot overgrows. So 'can't build until fully worked' AND 'a neglected building decays back to land' are the SAME gate, read live. The renderer draws a roof only where standing>0.5; below that it's yard/tamed/wild by `work`.",
+      "on": "building", "set": "standing",
+      "expr": "iff(gt(standing,0.5), gt(work,0.55), gt(capacity,0)*ge(work,0.98))" },
+
+    { "_shop_econ_note": "★ SHOP STOCK & PRICE (template #5, live). Stock restocks at the shop's `supply` rate and drains with local DEMAND (a busy block empties shelves faster). PRICE = scarcity: falls as stock piles up, rises when it's bare, and lifts with neighbourhood WEALTH — so the same good is dearer uptown, and a run on a shop shows up as a price spike. This is the substrate a MERCHANT reads (buy where cheap, sell where dear). Only shops (use==1) participate; runs only while the block is Detailed.",
+      "on": "building", "set": "stock", "expr": "iff(eq(use,1), clamp(stock + supply - 0.30*parent.busy, 0, 12), stock)" },
+    { "on": "building", "set": "price", "expr": "iff(eq(use,1), clamp(2.6 - 0.22*stock + 0.6*parent.wealth, 0.3, 3), 0)" },
+
+    { "_grove_established_note": "LATCH: once a grove has ever held trees (tree_n > 0, set by the tree→grove rollup), `established` sticks at 1. The clear-cut event reads this so it can't misfire on the reveal tick (before the first rollup, tree_n is still 0 but the grove isn't empty — it just hasn't aggregated yet). max() makes the latch monotonic.",
+      "on": "grove", "set": "established", "expr": "max(established, gt(tree_n, 0.5))" },
+
+    { "_note": "WEATHER as DATA (not engine code). Each district samples the `cloud` FIELD at its own location and ACCUMULATES it as cloud_density (a slow build toward the local cloud level). RULES (not events) drive this + `raining`, because at the city zoom districts are COARSE/dormant and events only run on ACTIVE (revealed) scopes — but rules run coarse too, so weather state stays live at every LOD. `raining` = a hysteresis band (on above 0.66, off below 0.5) so it doesn't flicker at the threshold. The broadcast pushes it to children so zooming in can SHOW rain.",
+      "on": "district", "set": "cloud_density",
+      "expr": "clamp(cloud_density + 0.08*(field(cloud, cx, cy) - cloud_density), 0, 1)" },
+    { "on": "district", "set": "raining",
+      "expr": "iff(gt(cloud_density, 0.66), 1, iff(lt(cloud_density, 0.5), 0, raining))" }
+  ],
+
+  "_settle_note": "★ WORLDGEN, NOT SIM — the founder's crucial correction: 'saturation determines things BEFORE we look at the zoom level, not during.' Land use + zoning saturation + footprint are DECIDED ONCE, when a scope is first observed (reveal), iterated to convergence, then FROZEN to canon. They live in `settle_rules` (run at reveal), NOT `rules` (run every tick) — so buildings can NEVER bounce as the sim runs, because nothing recomputes them after reveal. This is the double-slit / lazy-canon: observation crystallizes the possibility into a fixed fact. Because blocks reveal lazily (on dive), each building's use is fixed when its block is revealed, and its civic count flows UP to the district (settle_ancestors) so a later-dived block sees the district already saturated — cross-block scarcity accumulates as you explore. No hysteresis / confirmation-counter needed anymore: settle converges once, cleanly, then never runs again.",
+  "settle_rules": [
+    { "_capacity_note": "★ LOT SIZE → CAPACITY (founder: 'couldn't we make lot size determine building capacity/availability just as easily?'). Lots come first (count ∝ block area, so they emerge from the LAND); then each lot's SIZE decides what it holds. `capacity` = how much this lot supports: a min-area GATE (area < ~0.004 → capacity 0 = EMPTY, a yard/pocket, NO building drawn — this is 'min size' as a real gate, not a crammed sliver), then rising with area. Everything downstream (does it build, footprint, split) reads capacity. THE model: the land decides, not a count formula.",
+      "on": "building", "set": "capacity",
+      "expr": "iff(lt(area,0.0022), 0, clamp(0.3 + area*18, 0.3, 3))" },
+    { "_built_note": "does this lot BUILD at all? capacity 0 (too-small lot) → 0 = empty yard. The renderer draws nothing for built=0 (just the lot/ground shows).",
+      "on": "building", "set": "built", "expr": "gt(capacity,0)" },
+
+    { "_footprint_note": "BUILDING SIZE ⊕ ITS HONEST LOT — from the lot's `area` (sqrt so small lots still read, capped). Worldgen: fixed when observed. Only matters if built.",
+      "on": "building", "set": "footprint",
+      "expr": "clamp(0.35 + 0.9*sqrt(clamp(area,0,1)), 0.35, 0.95)" },
+
+    { "_situation_note": "PLOT SITUATION — road_access = is this plot near a lane (sampled at its world centre via near_road). Fixed at reveal; the use scores below read it.",
+      "on": "building", "set": "road_access",
+      "expr": "field(near_road, (wx0+wx1)/2, (wy0+wy1)/2)" },
+
+    { "_use_pref_note": "USE BY PREFERENCE (founder's 'a shop wants X, a hospital wants big+highway'). Each use SCORES the plot over its situation with a MIN-AREA GATE (ge(area,k)→0 below the size it needs). Highest score claims the plot (argmax below). Resi = strong default baseline (city is mostly homes); the others must earn their niche. Indices: 0 resi 1 shop 2 café 3 clinic 4 school 5 office. Civic scores subtract the DISTRICT saturation (parent.*_sat) — the scarcity feedback, now converging DURING settle (settle iterates rules+rollups so the count→saturation→suppression loop settles before freezing). No hysteresis term needed — settle isn't a per-tick loop, so there's nothing to flicker.",
+      "on": "building", "set": "s_resi",
+      "expr": "ge(area,0.006)*(1.15 + 0.6*area + 0.4*wealth)" },
+    { "on": "building", "set": "s_shop",
+      "expr": "ge(area,0.004)*(0.6 + 0.9*road_access + 0.5*parent.busy + 0.5*(1-parent.mix))" },
+    { "on": "building", "set": "s_cafe",
+      "expr": "ge(area,0.003)*(0.45 + 0.7*road_access + 0.8*parent.busy)" },
+    { "_clinic_note": "clinic NICHE = road-accessible, wealthy, MID-size (oversize penalty sends big lots to office/school). `- 0.85*parent.clinic_sat` = the district scarcity feedback.",
+      "on": "building", "set": "s_clinic",
+      "expr": "ge(area,0.02)*(0.95 + 1.1*road_access + 0.6*wealth - 4*max(area-0.05,0)) - 0.85*parent.clinic_sat" },
+    { "on": "building", "set": "s_school",
+      "expr": "ge(area,0.04)*(0.6 + 3.0*area + 0.6*parent.mix + 0.5*(1-road_access)) - 0.85*parent.school_sat" },
+    { "on": "building", "set": "s_office",
+      "expr": "ge(area,0.035)*(0.55 + 1.0*road_access + 0.7*wealth + 0.5*parent.busy) - 0.6*parent.office_sat" },
+    { "on": "building", "set": "use_best",
+      "expr": "max(max(max(s_resi,s_shop),max(s_cafe,s_clinic)),max(s_school,s_office))" },
+    { "_use_argmax_note": "argmax → the committed use, written ONCE at settle and frozen. No candidate/confirmation dance — settle converges then stops, so `use` is canon.",
+      "on": "building", "set": "use",
+      "expr": "iff(ge(s_resi,use_best-0.0001),0, iff(ge(s_shop,use_best-0.0001),1, iff(ge(s_cafe,use_best-0.0001),2, iff(ge(s_clinic,use_best-0.0001),3, iff(ge(s_school,use_best-0.0001),4, 5)))))" },
+
+    { "_flags_note": "presence flags → rolled up (building→block→district) so the district saturation counts them. Run in settle so the count feeds back DURING crystallization.",
+      "on": "building", "set": "is_clinic", "expr": "eq(use,3)" },
+    { "on": "building", "set": "is_school", "expr": "eq(use,4)" },
+    { "on": "building", "set": "is_office", "expr": "eq(use,5)" },
+
+    { "_fill_note": "★ ROOFTOP FILL — how much of its LOT a building's roof covers, DECIDED FROM MEANING (founder: 'some fill to the brim, some don't; a rich person keeps most of it yard'). WEALTH lowers fill (the rich keep lawn/setback); BUSY raises it (dense commercial fills the brim); USE matters — shops/offices/clinic pack their lots (0.9+), apartments moderate, schools sit in grounds (low fill, big yard). area nudges (a huge lot keeps proportionally more open). All authorable: change the formula to change the city's grain. 0.3..0.95 of the carved lot shape. This is worldgen (settle), frozen.",
+      "on": "building", "set": "fill",
+      "expr": "clamp( (0.62 + 0.35*parent.busy - 0.45*wealth - 0.5*max(area-0.06,0)) + 0.28*eq(use,1) + 0.22*eq(use,5) + 0.2*eq(use,3) - 0.28*eq(use,4) - 0.06*eq(use,0), 0.3, 0.95 )" },
+
+    { "_split_note": "★ LOT SPLIT — a big lot can hold MORE THAN ONE building (founder: 'some might split a lot to 2 buildings'). split = how many footprints on this lot: big + dense residential/mixed splits into 2 (a duplex / two houses on a wide lot); very big → 3; small or single-purpose (civic, shops) stays 1. The renderer draws `split` footprints across the lot. Meaning-driven: raise the area gates for a coarser grain, add uses that subdivide.",
+      "on": "building", "set": "split",
+      "expr": "clamp(1 + ge(area,0.05)*(eq(use,0)+eq(use,5)) + ge(area,0.11)*eq(use,0), 1, 3)" },
+
+    { "_surface_note": "★ PLOT SURFACE (settle, frozen) — what the ground of this plot is graded to, which sets how FAST it reverts to wild when neglected. 0 = bare dirt (reverts fastest), 1 = lawn/tamed grass (medium), 2 = paved (reverts slowest — concrete resists nature longest). Commercial/office/civic → paved; homes → lawn; unbuilt/frontier → dirt. Read by the per-tick `work` decay below as a resistance term. Frozen canon like use/fill.",
+      "on": "building", "set": "surface",
+      "expr": "iff(gt(capacity,0), iff(or(or(eq(use,1),eq(use,5)),or(eq(use,3),eq(use,4))), 2, 1), 0)" },
+
+    { "_shop_seed_note": "★ THE SHOP ECONOMY (TEMPLATE #5 goods/prices). Only shops (use==1) trade. `supply` = this shop's own restock rate (a per-shop trait, so shops differ → prices differ). `stock` starts varied. Frozen at settle; the live stock/price rules below take over. Non-shops carry stock 0 (they don't price).",
+      "on": "building", "set": "supply", "expr": "iff(eq(use,1), 0.12 + 0.18*rand(7), 0)" },
+    { "on": "building", "set": "stock", "expr": "iff(eq(use,1), 3 + 5*rand(8), 0)" },
+
+    { "_work_seed_note": "★ INITIAL WORK LEVEL (settle, frozen — the STARTING point the live `work` stat below decays/sustains from). How developed this plot is WHEN YOU FIND IT: the existing community's plots are already worked-up (you land into a built world), the frontier is half-tamed or wild. Driven by MEANING: an eligible plot (capacity>0) on an established, road-accessible, occupied part of the district starts high; remote/low-occupancy plots start lower. Only buildable land can be worked at all — but every plot here is already on plot_land, so the floor is the meaning, not the mask (the mask already gated the carve). This is the frozen SEED; `work` (per-tick) takes it live.",
+      "on": "building", "set": "work_seed",
+      "expr": "iff(gt(capacity,0), clamp(0.5 + 0.4*road_access + 0.3*occupancy + 0.2*parent.wealth, 0, 1), clamp(0.15*road_access + 0.2*occupancy, 0, 0.4))" },
+
+    { "_work_init_note": "SEED the live `work` stat to `work_seed` at reveal so the per-tick rule (in `rules`) has a starting value to decay/sustain from (a bare per-tick `work = f(work,…)` would start at 0). max() makes it a one-way latch at settle — settle iterates, but work only ever gets seeded UP to work_seed here; the live decay owns it after.",
+      "on": "building", "set": "work", "expr": "max(work, work_seed)" },
+
+    { "_recipe_note": "★ SCALE-SEEDED SCARCITY (reusable recipe): 'a scarce thing suppresses MORE of itself at the scale above.' clinics per district = legendary loot per dungeon = one blacksmith per town. Presence flag → rollup count up the tree → ancestor → saturation → suppress. Now settled at WORLDGEN time (once, at reveal), not per-tick — so it can't bounce. Because settle iterates rules+rollups to convergence, the saturation is a plain clamped target (no damping needed — there's no per-tick oscillation when it converges once and freezes).",
+      "on": "district", "set": "clinic_sat", "expr": "clamp(0.5*clinic_total, 0, 1.6)" },
+    { "on": "district", "set": "school_sat", "expr": "clamp(0.55*school_total, 0, 1.6)" },
+    { "on": "district", "set": "office_sat", "expr": "clamp(0.26*office_total, 0, 1.4)" },
+
+    { "_sat_down_note": "SATURATION FLOWS DOWN one level per rule (block reads its district; buildings read their block via parent.*_sat in the scores). Each is the sole writer on its kind → no clobber. In settle these run top-down each pass, so the district's saturation reaches buildings within the convergence.",
+      "on": "block", "set": "clinic_sat", "expr": "parent.clinic_sat" },
+    { "on": "block", "set": "school_sat", "expr": "parent.school_sat" },
+    { "on": "block", "set": "office_sat", "expr": "parent.office_sat" },
+
+    { "_tree_viable_note": "★★ TREES RESPECT THE TERRAIN — the same way a building respects its lot. A tree scatters in a ring around its grove; that ring can spill onto RIVER, bare ROCK, or a ROAD. Rather than a renderer band-aid (draw-skip), we settle it into STATE: sample the fields at the tree's own world spot (wx/wy, threaded down through the grove's block patch) and decide whether it actually GREW there. water → never (0); a swept road corridor → never (0, trees DODGE roads exactly like plots do via road_near); rock/steep → rare hardy survivor (chance(0.12), deterministic per tree); otherwise it lives. This writes `alive`, the SAME stat the tree→grove rollup sums — so an unviable tree is simply not one of the grove's trees: tree_n counts 2/3/4 real trees exactly like a block counts its real buildings, no phantom trunks in the water or on the tarmac. Frozen at reveal (settle), deterministic. The `where`-gate keeps most trees on wooded land; this culls the ring-scatter spillover it can't reach (it only relocates the grove seed, not each tree).",
+      "on": "tree", "set": "alive",
+      "expr": "iff(gt(field(water, wx, wy), 0.5), 0, iff(gt(field(on_road, wx, wy), 0.5), 0, iff(or(field(rock, wx, wy), field(steeper, wx, wy)), chance(0.12), 1)))" }
+  ],
+
+  "rollups": [
+    { "_note": "COUNT the civic uses up the scale tree, building → block → district. Two hops: buildings sum into their block, blocks sum into their district. `sum` reducer. The district's *_total is the whole-district civic count that drives the saturation (feedback) above.",
+      "parent": "block",    "child_stat": "is_clinic",   "parent_stat": "clinic_n",     "reduce": "sum" },
+    { "parent": "block",    "child_stat": "is_school",   "parent_stat": "school_n",     "reduce": "sum" },
+    { "parent": "block",    "child_stat": "is_office",   "parent_stat": "office_n",     "reduce": "sum" },
+    { "parent": "district", "child_stat": "clinic_n",    "parent_stat": "clinic_total", "reduce": "sum" },
+    { "parent": "district", "child_stat": "school_n",    "parent_stat": "school_total", "reduce": "sum" },
+    { "parent": "district", "child_stat": "office_n",    "parent_stat": "office_total", "reduce": "sum" },
+
+    { "_grove_rollup_note": "★★ TREES → GROVE (the coupling that makes chopping matter). Every tick each grove RE-AGGREGATES from its live tree children: tree_n = how many trees remain, canopy = their mean health, vigor = same (so a stressed grove reads stressed). Because a `despawn`ed tree simply isn't in the child set next tick, chopping a tree makes tree_n fall and canopy drop with ZERO special-case code — the grove is DEFINED as its trees. An event (below) despawns a grove once tree_n hits 0: clear-cut land goes back to bare ground. This is the bidirectional loop — grove→trees on reveal (worldgen), trees→grove every tick (rollup).",
+      "parent": "grove", "child_stat": "alive",  "parent_stat": "tree_n", "reduce": "sum" },
+    { "parent": "grove", "child_stat": "health", "parent_stat": "canopy", "reduce": "mean" }
+  ],
+
+  "_broadcast_removed_note": "We do NOT broadcast the saturation. A broadcast fires at EVERY parent→child pair unconditionally, so it clobbers (city→district would zero the district's computed value; a second broadcast level re-clobbers). Instead the saturation flows down via single-level `parent.X` RULES (below): a block copies its district's clinic_sat, a building reads its block's — each rule is the sole writer of that stat on that kind, so no clobber. Cleaner than broadcast for a computed value that must survive. RECIPE NOTE: to push a COMPUTED scope stat downward, prefer a `set X = parent.X` rule per level over a broadcast.",
+
+  "actions": [
+    { "on": "occupant", "name": "wander_next_room",
+      "score": "restless*gt(energy,0.35)*0.7",
+      "effects": [ { "op": "move", "stat": "door" } ]
+    },
+    { "on": "occupant", "name": "mingle",
+      "score": "sociable*gt(here_count(),0)*gt(energy,0.4)*0.8",
+      "effects": [ { "op": "affect", "stat": "co:mood", "expr": "0.02*sociable" } ]
+    },
+    { "on": "occupant", "name": "rest",
+      "score": "lt(energy,0.4)*1.0",
+      "effects": [ { "op": "add", "stat": "energy", "expr": "0.1" } ]
+    },
+    { "on": "occupant", "name": "idle",
+      "score": "0.3",
+      "effects": [ { "op": "add", "stat": "mood", "expr": "0.004" } ]
+    },
+
+    { "_schedule_note": "★ THE SCHEDULE (template #2, tuned in worlds/citylife.json) — utility AI gated on the CLOCK broadcast down to this block (parent.is_night / parent.is_work), NOT scheduled-at-time events (the ⚠ untested prim). The highest score wins each tick, so the routine EMERGES: sleep pulls at night (harder when tired), work is the daytime plurality with a soft energy term, eat spikes with hunger, socialising fills the evenings, the break spikes when exhausted. `at`: 0 home · 1 work · 2 out · 3 eatery — the location the pawn-render pass will read to walk them.",
+      "on": "person", "name": "sleep",
+      "score": "parent.is_night*(0.7 + 0.6*(1-energy))",
+      "effects": [ { "op": "add", "stat": "energy", "expr": "0.15" }, { "op": "set", "stat": "at", "expr": "0" }, { "op": "unlink", "stat": "guest" } ]
+    },
+    { "_towork_note": "★ LEAVE FOR WORK — ANTICIPATORY, EMERGENT (respecting time). Nobody says 'go now': the person fires this once the clock passes their OWN leave_h = 9 − (commute ÷ walk-speed) − diligence. So a person whose job is across the block leaves EARLIER than one next door (longer commute), and a diligent soul who loves the job leaves earlier still (the diligence buffer) while a slacker cuts it fine. Setting at=1 makes the walk-rule carry them toward the job; they don't EARN until they arrive (the work action needs dist_job≈0). Two people, same 9am start, leave at different times and arrive early / on-time / late — purely from their distance and their trait.",
+      "on": "person", "name": "to_work",
+      "score": "gt(parent.hour, leave_h)*lt(parent.hour,17.5)*gt(dist_job,0.055)*(0.5 + 0.4*diligence)",
+      "effects": [ { "op": "set", "stat": "at", "expr": "1" }, { "op": "unlink", "stat": "guest" } ]
+    },
+    { "_work_note": "★ WORK — only EARN once you've actually arrived (dist_job small). So the commute is real: leave late and you clock in late, losing the early hours' wage. at=1 keeps you at your post.",
+      "on": "person", "name": "work",
+      "score": "lt(dist_job,0.07)*gt(parent.hour,8.5)*lt(parent.hour,18)*(0.4 + 0.5*energy)",
+      "effects": [
+        { "op": "add",    "stat": "money",  "expr": "wage" },
+        { "op": "add",    "stat": "energy", "expr": "0 - 0.02" },
+        { "op": "add",    "stat": "hunger", "expr": "0.015" },
+        { "op": "set",    "stat": "at",     "expr": "1" },
+        { "op": "unlink", "stat": "guest" }
+      ]
+    },
+    { "on": "person", "name": "eat",
+      "score": "hunger*1.4*gt(money,0.02)",
+      "effects": [
+        { "op": "add",    "stat": "hunger", "expr": "0 - 0.5" },
+        { "op": "add",    "stat": "energy", "expr": "0.05" },
+        { "op": "add",    "stat": "money",  "expr": "0 - 0.05" },
+        { "op": "set",    "stat": "at",     "expr": "3" },
+        { "op": "unlink", "stat": "guest" }
+      ]
+    },
+    { "_headout_note": "★ HEAD OUT (template #3) — pick a venue ONCE (gated lt(edge_count(guest),1), so no per-tick re-pick → no sloshing). `link guest:venue@max:target.appeal_now` grabs the highest-appeal open venue among the block's venues; the 0.55 base keeps you wanting out after a burnt-out venue empties, so you re-pick next door (migration). Blocks with no venue → the link finds nothing and you just stay in / idle.",
+      "on": "person", "name": "head_out",
+      "score": "gt(parent.hour,16.9)*lt(parent.hour,23.5)*lt(edge_count(guest),1)*(0.55 + 0.35*(1-social))",
+      "effects": [
+        { "op": "link", "stat": "guest:venue@max:target.appeal_now" },
+        { "op": "add",  "stat": "social", "expr": "0.15" },
+        { "op": "set",  "stat": "at",     "expr": "4" }
+      ]
+    },
+    { "_stayout_note": "★ STAY OUT — commitment (kills sloshing) + the exit valve: score rises with FUN, so a good night holds you and a bad/dry one lets sleep or a break outbid → you leave, maybe to the other venue. `affect guest:stock -0.14` = you eat, drawing the venue's mains down (the busiest venue burns through fastest → its own scarcity).",
+      "on": "person", "name": "stay_out",
+      "score": "gt(edge_count(guest),0)*gt(parent.hour,16.5)*lt(parent.hour,23.5)*(0.05 + 0.9*fun)",
+      "effects": [
+        { "op": "add",    "stat": "social", "expr": "0.25" },
+        { "op": "add",    "stat": "energy", "expr": "0 - 0.01" },
+        { "op": "affect", "stat": "guest:stock", "expr": "0 - 0.14" },
+        { "op": "set",    "stat": "at",     "expr": "4" }
+      ]
+    },
+    { "on": "person", "name": "break",
+      "score": "0.25 + 0.6*lt(energy,0.3)",
+      "effects": [ { "op": "add", "stat": "energy", "expr": "0.035" }, { "op": "set", "stat": "at", "expr": "2" }, { "op": "unlink", "stat": "guest" } ]
+    }
+  ],
+
+  "events": [
+    { "_dayroll_note": "★ DAY ROLLOVER (clock template) — resets the hour accumulator and counts the day. Rising-edge on ge(hour,24): fires once at midnight, the `do` subtracts 24 (which re-arms the edge for tomorrow) and increments day. Modulo-free periodic pattern (probe_time payday). Runs on the always-active city, so days accrue at every zoom.",
+      "on": "city", "when": "ge(hour,24)", "label": "🌅 a new day breaks over Veranholm",
+      "do": [ { "op": "set", "stat": "hour", "expr": "hour - 24" }, { "op": "add", "stat": "day", "expr": "1" } ] },
+    { "_dusk_note": "Chronicle colour + the render's cue to warm the grade. Band rising-edge (fires once in the 20:00–21:00 window, re-arms after midnight) so it beats exactly once per evening.",
+      "on": "city", "when": "ge(hour,20)*lt(hour,21)", "label": "🌆 dusk settles over the city", "do": [] },
+    { "on": "city", "when": "ge(hour,6)*lt(hour,7)", "label": "🌇 dawn — the city stirs awake", "do": [] },
+
+    { "on": "occupant", "when": "gt(mood,0.9)*lt(content,0.5)",
+      "label": "settled in, content", "do": [ { "op": "set", "stat": "content", "expr": "1" } ] },
+
+    { "_venue_events_note": "★ NIGHTLIFE BEATS (templates #3/#4). The nightly ROLL sets a fresh hidden food_quality + restocks the mains at opening (rand differs each night). The GATHERING fires when a venue fills. The STOCKOUT beat when the mains run dry (consequence of being too popular → migration). All rising-edge, re-arm each night; only fire on active (dived) blocks.",
+      "on": "venue", "when": "ge(hour,open_from)*lt(hour,open_from+0.4)",
+      "label": "🍳 opens for the night", "do": [
+        { "op": "set", "stat": "food_quality", "expr": "0.2 + 0.7*rand(3)" },
+        { "op": "set", "stat": "stock", "expr": "cap" } ] },
+    { "on": "venue", "when": "ge(crowd,4)", "label": "🎉 the place fills up — a scene kicks off",
+      "do": [ { "op": "affect", "stat": "guest:social", "expr": "0.1" } ] },
+    { "on": "venue", "when": "lt(stock,0.5)*is_open", "label": "🍽 runs out of the main course", "do": [] },
+
+    { "_clearcut_note": "★★ A GROVE DIES WHEN ITS LAST TREE IS CHOPPED. Guarded by `established` (a rule sets it to 1 once the grove has ever had trees), so this can't misfire on the reveal tick before the first tree→grove rollup runs (when tree_n is still 0). Rising-edge: fires ONCE, the frame tree_n falls to 0 on an established grove → despawn the now-empty grove so clear-cut land reverts to bare ground. Chopping is `despawn` on a tree (a host intent / future action); the grove's death is pure consequence — no code knows what a 'forest' is.",
+      "on": "grove", "when": "eq(established,1)*lt(tree_n,0.5)",
+      "label": "grove cleared", "do": [ { "op": "despawn" } ] }
+  ],
+
+  "broadcasts": [
+    { "_note": "Push the district's rain state DOWN to its children (blocks) so zooming in can render rain in the areas where it's actually raining. gain 1 = copy the parent value straight down.",
+      "on": "district", "parent_stat": "raining", "child_stat": "raining", "gain": 1 },
+
+    { "_clock_down_note": "★ CLOCK DOWNWARD (template #2 needs this) — the clock lives on the city; a person's schedule reads parent.is_night / parent.is_work where parent = its block. Broadcasts are one level, so relay it city→district then district→block. gain 1 = straight copy. On a dive the whole path is Detailed, so the current clock reaches the people you're watching.",
+      "on": "city",     "parent_stat": "hour",     "child_stat": "hour",     "gain": 1 },
+    { "on": "city",     "parent_stat": "is_night", "child_stat": "is_night", "gain": 1 },
+    { "on": "city",     "parent_stat": "is_work",  "child_stat": "is_work",  "gain": 1 },
+    { "on": "district", "parent_stat": "hour",     "child_stat": "hour",     "gain": 1 },
+    { "on": "district", "parent_stat": "is_night", "child_stat": "is_night", "gain": 1 },
+    { "on": "district", "parent_stat": "is_work",  "child_stat": "is_work",  "gain": 1 },
+    { "_hour_to_venues_note": "relay hour one more level, block→children, so venues can gate their own open-hours (template #3).",
+      "on": "block", "parent_stat": "hour", "child_stat": "hour", "gain": 1 }
+  ]
+}

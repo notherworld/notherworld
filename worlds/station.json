@@ -1,0 +1,28 @@
+{
+  "name": "Station Kestrel",
+  "outer": "the humming central concourse of Station Kestrel",
+  "people": ["Vex", "Cly", "Orin", "Nadia", "Kes", "Bexley", "Ryo", "Suri", "Halden", "Mox"],
+  "room_types": [
+    { "key": "docking bay", "objects": ["a sealed airlock", "stacked cargo pods", "a docked shuttle"] },
+    { "key": "med bay", "objects": ["an autodoc pod", "a med scanner", "two stasis beds"] },
+    { "key": "reactor", "objects": ["a humming fusion core", "coolant conduits", "a warning klaxon"] },
+    { "key": "quarters", "objects": ["a fold-down bunk", "a personal locker", "a starlit viewport"] },
+    { "key": "mess", "objects": ["a food printer", "bolted tables", "a coffee dispenser"] },
+    { "key": "bridge", "objects": ["command couches", "a holo nav-display", "a comms console"] },
+    { "key": "cargo hold", "objects": ["mag-locked crates", "a loader frame", "fuel drums"] }
+  ],
+  "building_types": [
+    { "key": "command", "names": ["the Command Module", "Bridge Deck"], "rows": 1, "cols": 2,
+      "rooms": ["bridge", "quarters"],
+      "occupants": [{ "role": "captain", "room": "bridge" }, { "role": "navigator", "room": "bridge" }] },
+    { "key": "habitat", "names": ["Habitat Ring A", "Habitat Ring B"], "rows": 2, "cols": 2,
+      "rooms": ["quarters", "mess", "quarters", "med bay"],
+      "occupants": [{ "role": "quartermaster", "room": "mess" }, { "role": "station medic", "room": "med bay" }] },
+    { "key": "engineering", "names": ["the Drive Section", "Engineering Spine"], "rows": 1, "cols": 2,
+      "rooms": ["reactor", "cargo hold"],
+      "occupants": [{ "role": "chief engineer", "room": "reactor" }, { "role": "deckhand", "room": "cargo hold" }] },
+    { "key": "dock", "names": ["Docking Bay 3", "the Aft Airlock"], "rows": 1, "cols": 2,
+      "rooms": ["docking bay", "cargo hold"], "occupants": [{ "role": "dockmaster", "room": "docking bay" }] }
+  ],
+  "plan": ["command", "habitat", "engineering", "dock", "habitat"]
+}
