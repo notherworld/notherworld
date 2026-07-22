@@ -40,6 +40,17 @@ owos_free(w);
 Strings returned by the library (`owos_name`, `owos_log_message`) are freed with `owos_free_string`.
 Events (`owos_log_len`/`owos_log_message`) are the channel a host drives VFX/quests/subtitles off.
 
+**Panic safety (the middleware contract):** no call in this API can crash the host process.
+Every export is wrapped in a panic guard — internal failures and hostile inputs (bad indices,
+bad ids) become no-ops returning a neutral default (`0` / `NULL` / `UINT32_MAX` for
+`owos_child`), and the message is retrievable via `owos_last_error()` (NULL when clear;
+reading clears it; free with `owos_free_string`). Enforced by `cargo test -p owos-ffi`.
+
+**Cross-platform determinism:** all transcendental math (`sin`/`cos` in the formula DSL and
+engine geometry) routes through [libm](https://crates.io/crates/libm) — pure-Rust, bit-identical
+on every platform and under WASM. `+ - * / sqrt` are IEEE-exact already. Same seed → same
+world, native or browser, Windows or Linux.
+
 ## Reproduce it
 
 ```bash

@@ -18,7 +18,7 @@ a web page, Unreal, Godot, or Unity. See [README.md](README.md) for the pitch,
 ```
 engine/owos-core     the simulation core: world.rs (spine + step()), expr.rs (formula DSL),
                      action.rs (effects), scale.rs (rollup/broadcast), canon.rs (ledger).
-                     Zero-dep, deterministic (seeded RNG, BTreeMap, no wall-clock).
+                     Deterministic (seeded RNG, BTreeMap, no wall-clock; trig via libm — bit-identical on every platform). Only dep: libm.
 engine/owos-author   JSON world loader: WorldSpec + build(json) -> World
 engine/owos-wasm     browser bridge (snapshot_json, sample_field, region_json, ...)
 engine/owos-ffi      C ABI (owos_ffi.dll + include/owos.h) — see docs/EMBED.md
@@ -56,6 +56,7 @@ output after any `engine/owos-core` change — if they drift, you changed behavi
 - `cargo run --release --bin regime` → overthrow year **4.3**
 - `cargo run --release --bin lodaudit` → **11 PASS** lines (proves sim-LOD is real, not labels)
 - `cargo run --release --bin packprobe` → PASS (carve/partition integrity)
+- `cargo test -p owos-ffi --release` → 2 pass (FFI panic-safety contract + embed numbers)
 
 ## Working principles (learned the hard way — they'll save you time)
 

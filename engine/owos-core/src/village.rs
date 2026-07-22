@@ -131,7 +131,7 @@ impl Village {
 
     pub fn weather_note(&self) -> String {
         let season = 40.0f32;
-        let weather = (0.75 + self.stress.weather_amp * (2.0 * PI * self.day as f32 / season).sin()).clamp(0.2, 1.1);
+        let weather = (0.75 + self.stress.weather_amp * libm::sinf(2.0 * PI * self.day as f32 / season)).clamp(0.2, 1.1);
         let drought = self.stress.drought.map_or(false, |(a, b)| self.day >= a && self.day < b);
         let mut tags = Vec::new();
         if weather < 0.65 {
@@ -159,7 +159,7 @@ impl Village {
         let dayf = self.day as f32;
         let season = 40.0f32;
 
-        let weather = (0.75 + self.stress.weather_amp * (2.0 * PI * dayf / season).sin()).clamp(0.2, 1.1);
+        let weather = (0.75 + self.stress.weather_amp * libm::sinf(2.0 * PI * dayf / season)).clamp(0.2, 1.1);
         let drought = self.stress.drought.map_or(false, |(a, b)| self.day >= a && self.day < b);
         let drought_mult = if drought { 0.5 } else { 1.0 };
 

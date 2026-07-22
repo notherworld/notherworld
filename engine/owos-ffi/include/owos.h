@@ -1,8 +1,8 @@
-/* owos.h — C ABI for the otherworldOS plugin.
+/* owos.h — C ABI for the notherworld engine plugin.
  *
  * Link owos_ffi (owos_ffi.dll / .so / .dylib) and #include this from your host
  * engine (Unreal C++, Godot GDExtension, Unity C# via P/Invoke). The host owns
- * rendering, physics, input, and the frame loop; otherworldOS owns the living
+ * rendering, physics, input, and the frame loop; the engine owns the living
  * world. Typical use:
  *
  *     OwosWorld* w = owos_new_demo(42);
@@ -59,6 +59,13 @@ char*      owos_name(OwosWorld* w, uint32_t id);       /* free with owos_free_st
 /* notable events */
 uint32_t   owos_log_len(OwosWorld* w);
 char*      owos_log_message(OwosWorld* w, uint32_t index); /* free with owos_free_string */
+
+/* Error reporting. No call in this API will ever crash your process: internal
+ * failures become no-ops returning a neutral default (0 / NULL / UINT32_MAX
+ * for owos_child), and the message is stored. Poll this to retrieve it —
+ * returns NULL when there is no error; reading clears it; free the string
+ * with owos_free_string. */
+char*      owos_last_error(void);
 
 void       owos_free_string(char* s);
 

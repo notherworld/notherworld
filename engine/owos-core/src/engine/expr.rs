@@ -111,8 +111,8 @@ impl Expr {
                         ("abs", [a]) => a.abs(),
                         // geometry/periodic: needed for real spatial layout (place a
                         // district on a ring, angle a street) computed AS DATA.
-                        ("sin", [a]) => a.sin(),
-                        ("cos", [a]) => a.cos(),
+                        ("sin", [a]) => libm::sinf(*a),
+                        ("cos", [a]) => libm::cosf(*a),
                         ("sqrt", [a]) => a.max(0.0).sqrt(),
                         ("floor", [a]) => a.floor(),
                         ("mod", [a, b]) => {
@@ -206,7 +206,7 @@ impl Expr {
                         let r = radius * ri as f32 / rings as f32;
                         for s in 0..8 {
                             let a = (s as f32 / 8.0) * std::f32::consts::TAU;
-                            let v = w.sample_field(&name, (x + r * a.cos()).clamp(0.0, 1.0), (y + r * a.sin()).clamp(0.0, 1.0));
+                            let v = w.sample_field(&name, (x + r * libm::cosf(a)).clamp(0.0, 1.0), (y + r * libm::sinf(a)).clamp(0.0, 1.0));
                             if v >= 0.5 { hit = 1.0; }
                         }
                     }
@@ -263,8 +263,8 @@ fn numeric_fn(f: &str, v: &[f32]) -> f32 {
         ("min", [a, b]) => a.min(*b),
         ("max", [a, b]) => a.max(*b),
         ("abs", [a]) => a.abs(),
-        ("sin", [a]) => a.sin(),
-        ("cos", [a]) => a.cos(),
+        ("sin", [a]) => libm::sinf(*a),
+        ("cos", [a]) => libm::cosf(*a),
         ("sqrt", [a]) => a.max(0.0).sqrt(),
         ("floor", [a]) => a.floor(),
         ("mod", [a, b]) => if *b != 0.0 { a - b * (a / b).floor() } else { 0.0 },

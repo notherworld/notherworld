@@ -1393,7 +1393,7 @@ impl World {
             let samples = (ring * 6).max(8);
             for s in 0..samples {
                 let a = (s as f32 / samples as f32) * std::f32::consts::TAU;
-                let (nx, ny) = ((x + r * a.cos()).clamp(0.0, 1.0), (y + r * a.sin()).clamp(0.0, 1.0));
+                let (nx, ny) = ((x + r * libm::cosf(a)).clamp(0.0, 1.0), (y + r * libm::sinf(a)).clamp(0.0, 1.0));
                 if self.sample_patch(gate, patch, nx, ny) > 0.5 {
                     return Some((nx, ny));
                 }
@@ -1412,7 +1412,7 @@ impl World {
             let mut best: Option<(f32, f32)> = None;
             for s in 0..samples {
                 let a = (s as f32 / samples as f32) * std::f32::consts::TAU;
-                let (nx, ny) = ((x + r * a.cos()).clamp(0.0, 1.0), (y + r * a.sin()).clamp(0.0, 1.0));
+                let (nx, ny) = ((x + r * libm::cosf(a)).clamp(0.0, 1.0), (y + r * libm::sinf(a)).clamp(0.0, 1.0));
                 if gate.sample(self, nx, ny) > 0.5 {
                     // prefer the closest sample on this ring (they're ~equal; take first)
                     best = Some((nx, ny));
