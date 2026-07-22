@@ -4,8 +4,37 @@
 // design/creature.ts, it appears here immediately — this page is how you judge
 // whether a new part reads at 40×40 before it ships to a million planets.
 import { useEffect, useRef } from 'react';
-import { drawCreature, TORSOS, HEADS, PATTERNS, type Stats } from '../design/creature';
+import { drawCreature, drawSilhouette, TORSOS, HEADS, PATTERNS, type Stats } from '../design/creature';
 import './parts.css';
+
+/** the ZOOM-CONSISTENCY check: portrait (close) and silhouette (block view)
+ *  drawn from the SAME stats — the creature must read as itself in both. */
+function PairCard({ label, stats }: { label: string; stats: Stats }) {
+  const big = useRef<HTMLCanvasElement>(null);
+  const small = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (big.current) drawCreature(big.current, stats);
+    const cv = small.current;
+    if (cv) {
+      const ctx = cv.getContext('2d')!;
+      ctx.clearRect(0, 0, 16, 16);
+      drawSilhouette((x, y, w, h, c) => {
+        ctx.fillStyle = c;
+        ctx.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
+      }, 8, 14, stats, 1.2);
+    }
+  }, [stats]);
+  return (
+    <div className="pt-card">
+      <div className="pt-pair">
+        <canvas ref={big} width={40} height={40} />
+        <canvas ref={small} width={16} height={16} className="pt-mini" />
+      </div>
+      <strong>{label}</strong>
+      <span className="pt-sub">portrait · block view</span>
+    </div>
+  );
+}
 
 const BASE: Stats = {
   species: 3, gene: 0.42, flyer: 0, size: 0.55, height: 0.5, leglen: 0.5,
@@ -82,6 +111,11 @@ export default function Parts() {
       <h2>random composites <span className="pt-count">how parts play together</span></h2>
       <div className="pt-grid">
         {Array.from({ length: 12 }, (_, i) => <Card key={i} label={`№ ${i + 1}`} stats={rando(i + 1)} />)}
+      </div>
+
+      <h2>zoom consistency <span className="pt-count">same stats, both tiers — same soul</span></h2>
+      <div className="pt-grid">
+        {Array.from({ length: 6 }, (_, i) => <PairCard key={i} label={`№ ${i + 1}`} stats={rando(i + 1)} />)}
       </div>
     </div>
   );
