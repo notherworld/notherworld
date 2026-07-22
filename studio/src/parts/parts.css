@@ -1,0 +1,20 @@
+.pt { max-width: 860px; margin: 0 auto; padding: 40px 24px 64px; }
+.pt-crumb { font-size: 13px; margin: 0 0 18px; }
+.pt-crumb a { color: var(--accent, #7aa2ff); text-decoration: none; }
+.pt h1 { font-size: 32px; letter-spacing: -0.02em; margin: 0 0 8px; }
+.pt-pitch { font-size: 14.5px; line-height: 1.6; opacity: 0.85; max-width: 640px; margin: 0 0 8px; }
+.pt h2 { font-size: 15px; margin: 28px 0 10px; text-transform: lowercase; letter-spacing: 0.04em; }
+.pt-count { font-size: 12px; opacity: 0.5; font-weight: 400; margin-left: 6px; }
+.pt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 10px; }
+.pt-card {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 12px 6px 9px; border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 9px; background: rgba(255,255,255,0.025);
+}
+.pt-card canvas {
+  width: 80px; height: 80px; image-rendering: pixelated;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.12));
+  border-radius: 6px;
+}
+.pt-card strong { font-size: 12.5px; }
+.pt-sub { font-size: 10px; opacity: 0.45; }

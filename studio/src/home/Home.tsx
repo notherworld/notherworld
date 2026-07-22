@@ -51,6 +51,13 @@ const PLAY: Card[] = [
 
 const LAB: Card[] = [
   {
+    href: '/parts.html',
+    title: 'creature parts',
+    blurb:
+      "The compositor's part registries drawn in isolation — torsos, heads, patterns, size and stature sweeps. The authoring bench for growing the bestiary.",
+    tag: 'tool',
+  },
+  {
     href: '/lab.html',
     title: 'partition lab',
     blurb:
