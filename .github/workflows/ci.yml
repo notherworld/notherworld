@@ -1,0 +1,34 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: build + determinism guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # type-check everything, then run the guards:
+      # - owos-author: pure-data worlds (same-seed identity, hotel star t73 /
+      #   gala t213, craft t94, emberhold cycle, loader error context)
+      # - owos-ffi: panic-safety contract + embed byte-identity (0.09/0.38/0.65)
+      # Running on Linux ALSO proves cross-platform determinism: these exact
+      # ticks were baselined on Windows.
+      - run: cargo check --workspace
+      - run: cargo test --workspace --release
+
+  studio:
+    name: studio builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm --prefix studio ci
+      - run: npm --prefix studio run build

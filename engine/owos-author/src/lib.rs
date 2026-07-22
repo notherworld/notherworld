@@ -249,23 +249,34 @@ fn reducer(s: &str) -> Reducer {
 /// Wire a spec's rules/behaviors into an existing world (does NOT spawn seed
 /// entities — see `seed_entities`). Propagates the first bad-formula error.
 pub fn wire(w: &mut World, spec: &WorldSpec) -> Result<(), String> {
+    // Every formula error is wrapped with WHERE it lives (section · kind · stat
+    // · the formula text) — "unexpected char ':'" alone is useless in a large
+    // world file; this is the difference between a fix and an excavation.
+    let ctx = |section: &str, on: &str, name: &str, formula: &str, e: String| {
+        format!("{e}\n  in {section} on '{on}' → \"{name}\"\n  formula: {formula}")
+    };
     for r in &spec.rules {
-        w.add_rule(&r.on, &r.set, &r.expr)?;
+        w.add_rule(&r.on, &r.set, &r.expr)
+            .map_err(|e| ctx("rules", &r.on, &r.set, &r.expr, e))?;
     }
     for r in &spec.coarse_rules {
-        w.add_coarse_rule(&r.on, &r.set, &r.expr)?;
+        w.add_coarse_rule(&r.on, &r.set, &r.expr)
+            .map_err(|e| ctx("coarse_rules", &r.on, &r.set, &r.expr, e))?;
     }
     for r in &spec.settle_rules {
-        w.add_settle_rule(&r.on, &r.set, &r.expr)?;
+        w.add_settle_rule(&r.on, &r.set, &r.expr)
+            .map_err(|e| ctx("settle_rules", &r.on, &r.set, &r.expr, e))?;
     }
     if let Some(n) = spec.settle_iters {
         w.set_settle_iters(n);
     }
     for a in &spec.actions {
-        w.add_data_action(&a.on, &a.name, &a.score, effs(&a.effects))?;
+        w.add_data_action(&a.on, &a.name, &a.score, effs(&a.effects))
+            .map_err(|e| ctx("actions", &a.on, &a.name, &a.score, e))?;
     }
     for e in &spec.events {
-        w.add_event(&e.on, &e.when, effs(&e.do_), &e.label)?;
+        w.add_event(&e.on, &e.when, effs(&e.do_), &e.label)
+            .map_err(|err| ctx("events", &e.on, &e.label, &e.when, err))?;
     }
     for g in &spec.generators {
         let cs: Vec<(String, String)> = g.child_stats.0.clone();
@@ -273,7 +284,8 @@ pub fn wire(w: &mut World, spec: &WorldSpec) -> Result<(), String> {
             let cov: Vec<(String, String)> = p.coverage.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
             (p.style.clone(), p.edge.clone(), p.x.clone(), p.y.clone(), p.weight.clone(), p.where_.clone(), p.clip.clone(), cov)
         });
-        w.add_generator_ex(&g.on, &g.spawn, &g.count, cs, g.cascade, &g.chain, g.chain_ring, part)?;
+        w.add_generator_ex(&g.on, &g.spawn, &g.count, cs, g.cascade, &g.chain, g.chain_ring, part)
+            .map_err(|e| format!("{e}\n  in generators: on '{}' spawning '{}'", g.on, g.spawn))?;
     }
     for r in &spec.rollups {
         w.add_rollup(Rollup {
@@ -288,13 +300,16 @@ pub fn wire(w: &mut World, spec: &WorldSpec) -> Result<(), String> {
         w.add_broadcast(Broadcast { parent_kind: b.parent_kind.clone(), parent_stat: b.parent_stat.clone(), child_stat: b.child_stat.clone(), gain: b.gain });
     }
     for m in &spec.convo_moves {
-        w.add_data_action("convo", &m.name, "0", effs(&m.effects))?;
+        w.add_data_action("convo", &m.name, "0", effs(&m.effects))
+            .map_err(|e| ctx("convo_moves", "convo", &m.name, "", e))?;
     }
     for (name, formula) in &spec.fields {
-        w.add_field(name, formula)?;
+        w.add_field(name, formula)
+            .map_err(|e| ctx("fields", "-", name, formula, e))?;
     }
     for r in &spec.routes {
-        w.add_route(&r.on, &r.node, &r.hub, &r.via, &r.route, &r.x, &r.y, &r.cost, &r.transition, r.max_span, &r.trans_kind, &r.style, r.redundancy, r.gates)?;
+        w.add_route(&r.on, &r.node, &r.hub, &r.via, &r.route, &r.x, &r.y, &r.cost, &r.transition, r.max_span, &r.trans_kind, &r.style, r.redundancy, r.gates)
+            .map_err(|e| ctx("routes", &r.on, &r.route, &r.cost, e))?;
     }
     Ok(())
 }

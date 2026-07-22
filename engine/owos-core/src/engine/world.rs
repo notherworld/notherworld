@@ -599,18 +599,19 @@ impl World {
     /// multi-scale worldgen), `chain`/`chain_ring` (route graph — topological space),
     /// and `partition` (style, edge, x-stat, y-stat) — adjacency over the children.
     pub fn add_generator_ex(&mut self, on_kind: &str, spawn_kind: &str, count: &str, child_stats: Vec<(String, String)>, cascade: bool, chain: &str, chain_ring: bool, partition: Option<(String, String, String, String, String, String, String, Vec<(String, String)>)>) -> Result<(), String> {
-        let count = super::expr::parse(count)?;
+        let count = super::expr::parse(count).map_err(|e| format!("{e} (in generator count \"{count}\")"))?;
         let mut cs = Vec::new();
         for (stat, formula) in child_stats {
-            cs.push((stat, super::expr::parse(&formula)?));
+            let expr = super::expr::parse(&formula).map_err(|e| format!("{e} (in child_stat \"{stat}\": {formula})"))?;
+            cs.push((stat, expr));
         }
         let partition = match partition {
             Some((style, edge, x, y, weight, where_src, clip_src, coverage_src)) => {
-                let where_gate = if where_src.trim().is_empty() { None } else { Some(super::expr::parse(&where_src)?) };
-                let clip = if clip_src.trim().is_empty() { None } else { Some(super::expr::parse(&clip_src)?) };
+                let where_gate = if where_src.trim().is_empty() { None } else { Some(super::expr::parse(&where_src).map_err(|e| format!("{e} (in partition where: {where_src})"))?) };
+                let clip = if clip_src.trim().is_empty() { None } else { Some(super::expr::parse(&clip_src).map_err(|e| format!("{e} (in partition clip: {clip_src})"))?) };
                 let mut coverage = Vec::new();
                 for (name, formula) in coverage_src {
-                    coverage.push((name, super::expr::parse(&formula)?));
+                    let expr = super::expr::parse(&formula).map_err(|e| format!("{e} (in coverage \"{name}\": {formula})"))?; coverage.push((name, expr));
                 }
                 Some(Partition { style, edge, x, y, weight, where_gate, clip, coverage })
             }

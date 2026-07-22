@@ -56,7 +56,10 @@ output after any `engine/owos-core` change — if they drift, you changed behavi
 - `cargo run --release --bin regime` → overthrow year **4.3**
 - `cargo run --release --bin lodaudit` → **11 PASS** lines (proves sim-LOD is real, not labels)
 - `cargo run --release --bin packprobe` → PASS (carve/partition integrity)
-- `cargo test -p owos-ffi --release` → 2 pass (FFI panic-safety contract + embed numbers)
+- `cargo test --workspace --release` → 7 pass (pure-data guards: hotel star t73/gala t213,
+  craft t94, same-seed identity, loader errors · FFI panic contract + embed numbers).
+  CI (.github/workflows/ci.yml) runs this on Linux per push — which cross-checks
+  Windows-baselined ticks on a second platform.
 
 ## Working principles (learned the hard way — they'll save you time)
 
