@@ -11,6 +11,7 @@ import hotelSpec from '../../../worlds/hotel.json';
 import craftSpec from '../../../worlds/craft.json';
 import emberholdSpec from '../../../worlds/emberhold.json';
 import citySpec from '../../../worlds/city.json';
+import huntSpec from '../../../worlds/probes/probe_hunt.json';
 import './proofs.css';
 
 type Status = 'idle' | 'running' | 'pass' | 'fail';
@@ -152,6 +153,49 @@ const PROOFS: Proof[] = [
       if (turns < 2) throw new Error(`only ${turns} directional turns — no cycle`);
       if (max - min < 10) throw new Error(`amplitude too small (${min}–${max})`);
       return `population swung ${max} → ${min} across ${turns} turns — a real boom-bust cycle`;
+    },
+  },
+  {
+    id: 'extinction',
+    title: 'the world remembers: overhunt a species and it is GONE',
+    what:
+      'Runs one glade twice. With a hunter: he fells the fattest grazer each strike, deaths outrun births, and the herd goes extinct — then the run continues 100 more ticks to prove NOTHING respawns. Without the hunter (one number changed in the seed): the same herd self-regulates and thrives for all 300 ticks.',
+    why:
+      'The claim most games fake. Creatures here are not spawn-table decorations — they have demography (births cost food and inherit parent stats; age culls; crowding caps). Kill faster than they breed and the species ends, permanently, and the world logs it. Consequence is an engine fact, not a script.',
+    native: 'cargo test hunted_species_goes_extinct_and_stays_extinct',
+    run: async () => {
+      const herd = (s: Snapshot) =>
+        s.entities.filter((e) => e.kind === 'grazer' && (e.stats['alive'] ?? 0) > 0.5).length;
+      // hunted: must go extinct AND stay extinct
+      const w = await createWorld(huntSpec);
+      let extinctAt = -1;
+      try {
+        for (let t = 0; t < 300; t++) {
+          w.step();
+          if (extinctAt < 0 && herd(w.snapshot()) === 0) extinctAt = t;
+        }
+        const s = w.snapshot();
+        if (extinctAt < 0) throw new Error('the hunted herd never went extinct');
+        if (herd(s) !== 0) throw new Error('the herd came back — respawned from nothing');
+        if (!s.log.some((l) => l.message.includes('falls silent')))
+          throw new Error('the glade never recorded its extinction');
+        w.steps(100);
+        if (herd(w.snapshot()) !== 0) throw new Error('extinction did not persist');
+      } finally {
+        w.dispose();
+      }
+      // control: same world, hunters = 0 → thrives
+      const controlSpec = JSON.parse(JSON.stringify(huntSpec));
+      controlSpec.seed[0].stats.hunters = 0;
+      const c = await createWorld(controlSpec);
+      try {
+        c.steps(300);
+        const alive = herd(c.snapshot());
+        if (alive < 10) throw new Error(`unhunted herd should thrive, only ${alive} remain`);
+      } finally {
+        c.dispose();
+      }
+      return `hunted: extinct at tick ${extinctAt}, still extinct 100 ticks later, the glade logged its own silence · unhunted: the same herd is thriving at tick 300`;
     },
   },
   {

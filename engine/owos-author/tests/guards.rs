@@ -102,6 +102,57 @@ fn emberhold_boom_busts() {
     assert!(max - min >= 10, "cycle amplitude too small: max {max}, min {min}");
 }
 
+/// count living grazers in the glade
+fn herd(w: &World) -> usize {
+    let glade = w.children(0)[0];
+    w.children(glade).iter().filter(|&&c| w.kind(c) == "grazer" && w.stat(c, "alive") > 0.5).count()
+}
+
+#[test]
+fn hunted_species_goes_extinct_and_stays_extinct() {
+    // THE GAME-PITCH CLAIM AS AN ENGINE FACT: a hunted species dies out and
+    // NOTHING respawns it — the world remembers. (probe_hunt.json: one hunter
+    // felling the fattest grazer each strike vs real demography.)
+    let json = load("worlds/probes/probe_hunt.json");
+    let mut w = owos_author::build(&json).expect("build");
+    let mut extinct_at = None;
+    for t in 0..300 {
+        w.step();
+        if herd(&w) == 0 && extinct_at.is_none() {
+            extinct_at = Some(t);
+        }
+    }
+    let extinct_at = extinct_at.expect("the hunted herd must go extinct within 300 ticks");
+    assert_eq!(herd(&w), 0, "species must STAY extinct — nothing respawns from nothing");
+    assert!(
+        w.log.iter().any(|e| e.message.contains("falls silent")),
+        "the glade must record its own extinction"
+    );
+    // and it remains extinct arbitrarily far into the future
+    for _ in 0..100 {
+        w.step();
+    }
+    assert_eq!(herd(&w), 0, "still extinct 100 ticks later (extinct_at tick {extinct_at})");
+}
+
+#[test]
+fn unhunted_species_thrives() {
+    // the CONTROL: the same world with hunters=0 keeps a living, self-
+    // regulating herd for the entire run — extinction above is CAUSED by the
+    // hunter, not baked into the data.
+    let json = load("worlds/probes/probe_hunt.json").replace("\"hunters\": 1", "\"hunters\": 0");
+    let mut w = owos_author::build(&json).expect("build");
+    for _ in 0..300 {
+        w.step();
+        assert!(herd(&w) > 0, "the unhunted herd must never die out");
+    }
+    assert!(herd(&w) >= 10, "the unhunted herd should be thriving, got {}", herd(&w));
+    assert!(
+        !w.log.iter().any(|e| e.message.contains("falls silent")),
+        "no extinction without the hunter"
+    );
+}
+
 #[test]
 fn bad_formula_reports_where() {
     // the loader must say WHICH formula broke, not just "unexpected char"

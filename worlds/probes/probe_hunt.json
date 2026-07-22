@@ -1,0 +1,80 @@
+{
+  "_note": "HUNT PROBE — the game-pitch claim as an engine fact: a hunted species goes EXTINCT and STAYS extinct (nothing respawns from nothing), while the same world without the hunter keeps a living, cycling herd. One glade, one herd of grazers with real demography (births cost food and inherit stats; old age culls; crowding caps the herd), and one optional hunter whose count reads the glade's `hunters` stat — so the A/B is one number in the seed. The hunter fells the FATTEST grazer each strike (@max pick), which also removes the best breeders: extinction pressure compounds systemically, not by script. This is the seed of the fauna layer: catch/document/overhunt all build on these exact prims.",
+
+  "rng_seed": 11,
+
+  "seed": [
+    {
+      "kind": "glade",
+      "name": "The Glade",
+      "reveal": true,
+      "stats": { "hunters": 1 }
+    }
+  ],
+
+  "generators": [
+    {
+      "on": "glade",
+      "spawn": "grazer",
+      "count": "14",
+      "child_stats": {
+        "food": "0.55 + 0.35*rand(1)",
+        "age": "0.10 + 0.90*rand(2)",
+        "alive": "1"
+      }
+    },
+    {
+      "on": "glade",
+      "spawn": "hunter",
+      "count": "hunters",
+      "child_stats": { "skill": "1" }
+    }
+  ],
+
+  "rules": [
+    { "on": "grazer", "set": "food", "expr": "clamp(food + 0.03, 0, 1)" },
+    { "on": "grazer", "set": "age", "expr": "age + 0.012" }
+  ],
+
+  "actions": [
+    {
+      "on": "hunter",
+      "name": "hunt",
+      "score": "chance(0.55)",
+      "effects": [
+        { "op": "affect_set", "stat": "co:alive@max:target.alive*target.food", "expr": "0" }
+      ]
+    },
+    { "on": "hunter", "name": "rest", "score": "0.1", "effects": [] }
+  ],
+
+  "events": [
+    {
+      "on": "grazer",
+      "when": "gt(food,0.8)*gt(age,0.25)*lt(age,1.5)*lt(here_count(),20)*chance(0.3)",
+      "label": "a calf is born",
+      "do": [
+        { "op": "add", "stat": "food", "expr": "-0.5" },
+        { "op": "spawn", "stat": "grazer", "expr": "calf of" }
+      ]
+    },
+    {
+      "on": "grazer",
+      "when": "lt(alive,0.5)",
+      "label": "felled by the hunter",
+      "do": [{ "op": "despawn" }]
+    },
+    {
+      "on": "grazer",
+      "when": "gt(age,2.1)",
+      "label": "died of old age",
+      "do": [{ "op": "despawn" }]
+    },
+    {
+      "on": "glade",
+      "when": "lt(child_sum(alive),0.5)",
+      "label": "the glade falls silent — the grazers are gone",
+      "do": []
+    }
+  ]
+}
