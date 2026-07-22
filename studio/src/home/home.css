@@ -1,0 +1,91 @@
+/* home — the hub. Same dark console family as the rest of the studio. */
+.home {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 48px 24px 64px;
+}
+
+.home-hero h1 {
+  font-size: 44px;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+}
+
+.home-pitch {
+  font-size: 17px;
+  line-height: 1.6;
+  max-width: 640px;
+  color: var(--text, #cdd3e0);
+  margin: 0 0 10px;
+}
+
+.home-pitch em { font-style: italic; opacity: 0.9; }
+
+.home-links { font-size: 14px; opacity: 0.85; margin: 0 0 8px; }
+.home-links a { color: var(--accent, #7aa2ff); text-decoration: none; }
+.home-links a:hover { text-decoration: underline; }
+
+.home-section { margin-top: 40px; }
+.home-section > h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  opacity: 0.55;
+  margin: 0 0 14px;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 14px;
+}
+
+.home-card {
+  display: block;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.home-card:hover {
+  border-color: rgba(122, 162, 255, 0.45);
+  background: rgba(122, 162, 255, 0.06);
+  transform: translateY(-1px);
+}
+
+.home-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.home-card-title { font-size: 16px; font-weight: 600; }
+
+.home-tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 2px 7px;
+  border-radius: 99px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  opacity: 0.75;
+  white-space: nowrap;
+}
+.home-tag-demo { border-color: rgba(122, 220, 160, 0.5); color: #9fe7bd; }
+.home-tag-experiment { border-color: rgba(240, 200, 120, 0.5); color: #f0d49a; }
+.home-tag-tool { border-color: rgba(122, 162, 255, 0.5); color: #a8c0ff; }
+.home-tag-wip { border-color: rgba(255, 140, 140, 0.5); color: #ffb0b0; }
+
+.home-card-blurb {
+  font-size: 13.5px;
+  line-height: 1.5;
+  opacity: 0.8;
+  margin: 0;
+}
+
+.home-foot { margin-top: 48px; font-size: 13.5px; opacity: 0.7; }
+.home-foot a { color: var(--accent, #7aa2ff); }

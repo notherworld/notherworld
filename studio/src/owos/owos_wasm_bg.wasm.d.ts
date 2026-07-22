@@ -1,0 +1,33 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_scope_free: (a: number, b: number) => void;
+export const scope_clear_intent: (a: number, b: number) => void;
+export const scope_ensure_tile: (a: number, b: number, c: number) => number;
+export const scope_flow_json: (a: number, b: number, c: number, d: number) => [number, number];
+export const scope_fold: (a: number, b: number) => void;
+export const scope_fold_outside: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
+export const scope_new: (a: number, b: number) => [number, number, number];
+export const scope_record: (a: number, b: number) => void;
+export const scope_region_at: (a: number, b: number, c: number, d: number) => number;
+export const scope_region_json: (a: number, b: number) => [number, number];
+export const scope_reveal: (a: number, b: number) => void;
+export const scope_reveal_rect: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
+export const scope_river_json: (a: number, b: number, c: number, d: number) => [number, number];
+export const scope_root: (a: number) => number;
+export const scope_route_path_json: (a: number, b: number, c: number) => [number, number];
+export const scope_sample_field: (a: number, b: number, c: number, d: number, e: number) => number;
+export const scope_sample_field_grid: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number];
+export const scope_set: (a: number, b: number, c: number, d: number, e: number) => void;
+export const scope_set_intent: (a: number, b: number, c: number, d: number) => void;
+export const scope_snapshot_json: (a: number) => [number, number];
+export const scope_snapshot_rect_json: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+export const scope_step: (a: number) => void;
+export const scope_steps: (a: number, b: number) => void;
+export const scope_tick: (a: number) => bigint;
+export const __wbindgen_externrefs: WebAssembly.Table;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __externref_table_dealloc: (a: number) => void;
+export const __wbindgen_start: () => void;

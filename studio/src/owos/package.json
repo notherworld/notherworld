@@ -1,0 +1,17 @@
+{
+  "name": "owos-wasm",
+  "type": "module",
+  "description": "WASM bindings for the otherworldOS scope-tree engine — the browser/JS embedding the web console runs on.",
+  "version": "0.0.1",
+  "license": "AGPL-3.0-only",
+  "files": [
+    "owos_wasm_bg.wasm",
+    "owos_wasm.js",
+    "owos_wasm.d.ts"
+  ],
+  "main": "owos_wasm.js",
+  "types": "owos_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

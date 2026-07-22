@@ -14,8 +14,9 @@ node_modules/
 studio/dist/
 dist/
 
-# wasm-pack output — regenerated via `wasm-pack build` (see CLAUDE.md)
-studio/src/owos/
+# wasm artifact is COMMITTED (deliberately): lets node-only users + Vercel run the
+# studio without a Rust toolchain. Rebuild after engine changes (see CLAUDE.md).
+
 
 # local AI-session context (personal — never commit)
 CLAUDE.local.md

@@ -1,5 +1,9 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+import { resolve } from 'node:path'
+
+// every page in the deploy — vite only builds index.html unless told otherwise
+const pages = ['index', 'studio', 'nother', 'terra', 'city', 'lab', 'drop', 'temple']
 
 // A tiny dev-only proxy for the LLM narrator. It reads OPENROUTER_API_KEY from
 // portal/.env (server-side only — never bundled into the client) and forwards
@@ -49,5 +53,12 @@ function openrouterProxy(env: Record<string, string>): Plugin {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '') // '' prefix → load non-VITE_ vars server-side
-  return { plugins: [react(), openrouterProxy(env)] }
+  return {
+    plugins: [react(), openrouterProxy(env)],
+    build: {
+      rollupOptions: {
+        input: Object.fromEntries(pages.map((p) => [p, resolve(__dirname, `${p}.html`)])),
+      },
+    },
+  }
 })

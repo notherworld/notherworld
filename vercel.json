@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm --prefix studio install",
+  "buildCommand": "npm --prefix studio run build",
+  "outputDirectory": "studio/dist"
+}
