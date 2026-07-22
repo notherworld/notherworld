@@ -164,7 +164,7 @@ isn't enough — duel THE #1 rival even at 0.71 vs 0.70, mend only the single si
 friend — append a pick selector to the target: `"stat": "rival:hp@max:target.prowess"`.
 The rank formula runs per candidate (with that candidate as `target`) and the value
 applies ONLY to the argmax (`@min:` = argmin). Works with `co:` too. Exact ties break
-to the earliest-linked neighbor — deterministic. Proven: `worlds/probe_pick.json`
+to the earliest-linked neighbor — deterministic. Proven: `worlds/probes/probe_pick.json`
 (1 attacker, 4 co-located peers → exactly one hit lands on the top-prowess fighter,
 exactly one care lands on the frailest).
 

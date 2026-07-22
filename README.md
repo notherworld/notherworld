@@ -58,6 +58,18 @@ npm --prefix studio run dev
 Then open `/nother.html` (an addressable multiverse), `/terra.html` (land on a living
 world), or the root studio to author your own.
 
-## License
+## License — and what it means for your game
 
-[AGPL-3.0](LICENSE). Free forever. Worlds you author are yours.
+[AGPL-3.0](LICENSE). Free forever, including commercially. In plain terms:
+
+- **You can sell a game built on this engine and keep every dollar.** No fees,
+  no royalties, no permission needed, ever.
+- **Your game's *code* must be open.** If your code links the engine, you must
+  offer its source (under AGPL) to your players — including players of a
+  server-hosted game.
+- **Your *assets* and *worlds* stay yours.** Art, music, story, and the world
+  JSON you author are your own works — keep them closed, sell them, whatever
+  you like. (Open code + closed assets is the classic id Software model: the
+  Doom engine was GPL'd and the game still sold.)
+- Want to keep your game code closed too? Ask about a commercial license —
+  open an issue.

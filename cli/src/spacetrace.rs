@@ -6,7 +6,7 @@
 use owos_core::engine::World;
 
 fn main() {
-    let json = std::fs::read_to_string("worlds/probe_space.json").expect("read");
+    let json = std::fs::read_to_string("worlds/probes/probe_space.json").expect("read");
     let mut w = owos_author::build(&json).expect("build");
 
     let courier = w.by_kind("courier").first().copied().expect("a courier");
