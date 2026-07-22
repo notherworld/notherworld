@@ -214,6 +214,56 @@ fn terra_fauna_ecosystem_lives() {
 }
 
 #[test]
+fn compaction_changes_nothing_but_the_log() {
+    // docs/LEDGER.md acceptance guard: fold-for-facts may thin narrative detail,
+    // but sim behavior must be bit-identical and per-label event totals EXACT.
+    let json = load("worlds/probes/probe_hunt.json").replace("\"hunters\": 1", "\"hunters\": 0");
+    let build = || owos_author::build(&json).expect("build");
+    let mut a = build(); // compacts every 500 ticks
+    let mut b = build(); // never
+    for t in 1..=4000u64 {
+        a.step();
+        b.step();
+        if t % 500 == 0 {
+            a.compact_log(a.tick.saturating_sub(200), &[]);
+        }
+    }
+    // sim untouched
+    assert_eq!(fingerprint_entities(&a), fingerprint_entities(&b), "compaction touched sim state");
+    // totals exact through summaries
+    let label = |m: &str| m.rsplit(" — ").next().unwrap_or(m).to_string();
+    let totals = |w: &World| -> std::collections::BTreeMap<String, u64> {
+        let mut t = std::collections::BTreeMap::new();
+        for e in &w.log {
+            if let Some(rest) = e.message.strip_prefix("⟪×") {
+                if let Some((n, tail)) = rest.split_once("⟫ ") {
+                    let l = label(tail.rsplit_once(" (t").map(|x| x.0).unwrap_or(tail));
+                    *t.entry(l).or_insert(0) += n.parse::<u64>().unwrap_or(0);
+                    continue;
+                }
+            }
+            *t.entry(label(&e.message)).or_insert(0) += 1;
+        }
+        t
+    };
+    assert_eq!(totals(&a), totals(&b), "compacted totals drifted from truth");
+    // and the log is genuinely smaller
+    assert!(a.log.len() < b.log.len(), "compaction should shrink the log ({} vs {})", a.log.len(), b.log.len());
+}
+
+/// entity-tree-only fingerprint (no log — compaction changes the log by design)
+fn fingerprint_entities(w: &World) -> String {
+    let mut out = String::new();
+    let mut stack = vec![0usize];
+    while let Some(id) = stack.pop() {
+        let kids = w.children(id);
+        out.push_str(&format!("{}:{}#{};", id, w.kind(id), kids.len()));
+        stack.extend(kids);
+    }
+    out
+}
+
+#[test]
 fn bad_formula_reports_where() {
     // the loader must say WHICH formula broke, not just "unexpected char"
     let json = load("worlds/emberhold.json").replace("0.55 + 0.25*rand(1)", "0.55 + : 0.25*rand(1)");

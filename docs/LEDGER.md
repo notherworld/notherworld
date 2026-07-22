@@ -83,21 +83,35 @@ shipped world approaches them:
    ids are canon** — same seed must mean same ids forever, so slots must never
    be reused.
 
-## Compaction, when it's earned
+## Compaction — BUILT and measured (`World::compact_log`, wasm `compact_log`)
 
-The design that fits the engine (same shape as sim-LOD — *fold, for facts*):
+*Fold, for history.* `compact_log(before_tick, keep)` collapses entries older
+than the cutoff into ONE summary per label carrying the **exact count and tick
+range** (`⟪×812⟫ a calf is born (t3–t9988)`). Kept verbatim: everything after
+the cutoff, each label's **first-ever occurrence** (firsts are canon), and any
+entry matching a `keep` pattern — importance is the author's call, as always.
 
-- When a scope folds, its N detailed facts compact into one aggregate fact with
-  a magnitude: "you kicked pig 7 Tuesday, pig 9 Wednesday" → "you were cruel to
-  the pigs that spring." Detail decays; consequence persists.
-- **Importance is an author formula**, like everything else (e.g.
-  `involves_player*3 + deaths*2 + first_of_kind`). The engine stays
-  meaning-agnostic; the world decides what deserves to survive. Top-K facts
-  survive verbatim, the rest summarize into counters.
-- The acceptance guard when it's built: **a compacted world and an uncompacted
-  one must behave identically** — stats, rollups, and every behavior untouched;
-  only narrative detail thins. That's a bit-exact test in the existing guard
-  style.
+Measured in practice (`cargo run --release --bin compactprobe` — twin terra
+ecosystems, same seed, 40k ticks, one compacting at a 1,500-entry threshold):
+
+- **Bounded forever:** the compacting world sawtooths at ~1,100–1,500 entries
+  (≈6× shrink per cycle) while its twin grows without limit.
+- **Sim untouched:** entity trees bit-for-bit identical after 3 compactions
+  (compaction only touches the log — enforced by the
+  `compaction_changes_nothing_but_the_log` cargo test).
+- **History stays TRUE:** per-label totals reconstructed from the compacted log
+  (1,800 births, 1,719 old-age deaths, 92 predator kills) matched ground truth
+  **exactly**, and every first-ever moment survived verbatim. What's lost is
+  only "which individual, which Tuesday" — the human-memory shape.
+
+Known v1 boundary: summaries from earlier cycles are kept as-is (they don't
+re-merge with later ones), so summary count grows by ~labels-per-cycle — a few
+hundred entries over dozens of cycles, negligible next to the fold itself.
+
+There is **no hard ledger cap** — the ceiling is platform budget (a native/
+console build has orders of magnitude more headroom than the browser, whose
+real constraint is per-heartbeat serialization). With a compaction policy wired
+to a threshold, both are effectively unbounded.
 
 ### Why compaction is SAFE here (the determinism trump card)
 

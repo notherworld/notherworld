@@ -758,6 +758,47 @@ impl World {
         self.entities[id].fidelity = Fidelity::Detailed;
     }
 
+    /// FOLD, FOR HISTORY — compact the event log (docs/LEDGER.md). Entries older
+    /// than `before_tick` collapse into ONE summary per distinct label carrying
+    /// the exact count and tick range ("⟪×812⟫ a calf is born (t3–t9988)").
+    /// Detail decays; the truth of what happened — and exactly how often —
+    /// survives. Kept verbatim: entries at/after `before_tick`, each label's
+    /// FIRST-EVER occurrence (firsts are canon), and anything matching a `keep`
+    /// pattern (importance is the AUTHOR's call, as always). Touches only the
+    /// log — never sim state — so behavior is bit-identical by construction
+    /// (guarded by `compaction_changes_nothing_but_the_log`). Deterministic:
+    /// BTreeMap grouping, stable order. Returns (entries_removed, entries_now).
+    pub fn compact_log(&mut self, before_tick: u64, keep: &[String]) -> (usize, usize) {
+        use std::collections::{BTreeMap, BTreeSet};
+        let label_of = |m: &str| m.rsplit(" — ").next().unwrap_or(m).to_string();
+        let before_len = self.log.len();
+        let mut out: Vec<Notable> = Vec::with_capacity(before_len);
+        // label -> (count, first_tick, last_tick) for the folded remainder
+        let mut folded: BTreeMap<String, (u64, u64, u64)> = BTreeMap::new();
+        let mut first_kept: BTreeSet<String> = BTreeSet::new();
+        for e in &self.log {
+            let label = label_of(&e.message);
+            let is_first = !first_kept.contains(&label);
+            let important = keep.iter().any(|k| !k.is_empty() && e.message.contains(k.as_str()));
+            if e.tick >= before_tick || is_first || important {
+                first_kept.insert(label);
+                out.push(e.clone());
+            } else {
+                let g = folded.entry(label).or_insert((0, e.tick, e.tick));
+                g.0 += 1;
+                g.2 = e.tick;
+            }
+        }
+        // summaries stamped at their range's END, merged into chronological order
+        for (label, (n, t0, t1)) in folded {
+            out.push(Notable { tick: t1, message: format!("⟪×{n}⟫ {label} (t{t0}–t{t1})") });
+        }
+        out.sort_by_key(|e| e.tick);
+        let removed = before_len - out.len();
+        self.log = out;
+        (removed, self.log.len())
+    }
+
     // ---- STREAMING HELPERS (observation-layer rect API) --------------------
     // A host camera speaks WORLD RECTS, not entity ids: "my window (+ lookahead
     // margin) is here — keep it warm." These are packaged with the engine so a

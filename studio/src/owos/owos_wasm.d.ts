@@ -10,6 +10,14 @@ export class Scope {
     [Symbol.dispose](): void;
     clear_intent(id: number): void;
     /**
+     * Compact the event log (fold-for-facts — docs/LEDGER.md): entries older
+     * than `before_tick` collapse into exact per-label count summaries; each
+     * label's first-ever moment and anything matching a comma-separated `keep`
+     * pattern survive verbatim. Long-session hosts call this when the log
+     * crosses their budget. Returns entries removed. Never touches sim state.
+     */
+    compact_log(before_tick: bigint, keep_csv: string): number;
+    /**
      * THE TILE WORLD: materialize the world tile at grid cell (tx, ty) — a fresh
      * copy of the spec's primary seed whose patch is [tx..tx+1, ty..ty+1]. The
      * global fields make adjacent tiles CONTINUOUS land; only the entity layer is
@@ -129,6 +137,7 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_scope_free: (a: number, b: number) => void;
     readonly scope_clear_intent: (a: number, b: number) => void;
+    readonly scope_compact_log: (a: number, b: bigint, c: number, d: number) => number;
     readonly scope_ensure_tile: (a: number, b: number, c: number) => number;
     readonly scope_flow_json: (a: number, b: number, c: number, d: number) => [number, number];
     readonly scope_fold: (a: number, b: number) => void;

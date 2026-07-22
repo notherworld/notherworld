@@ -175,6 +175,16 @@ impl Scope {
         self.world.record(on);
     }
 
+    /// Compact the event log (fold-for-facts — docs/LEDGER.md): entries older
+    /// than `before_tick` collapse into exact per-label count summaries; each
+    /// label's first-ever moment and anything matching a comma-separated `keep`
+    /// pattern survive verbatim. Long-session hosts call this when the log
+    /// crosses their budget. Returns entries removed. Never touches sim state.
+    pub fn compact_log(&mut self, before_tick: u64, keep_csv: &str) -> u32 {
+        let keep: Vec<String> = keep_csv.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+        self.world.compact_log(before_tick, &keep).0 as u32
+    }
+
     pub fn tick(&self) -> u64 {
         self.world.tick
     }

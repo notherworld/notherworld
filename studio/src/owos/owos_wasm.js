@@ -22,6 +22,22 @@ export class Scope {
         wasm.scope_clear_intent(this.__wbg_ptr, id);
     }
     /**
+     * Compact the event log (fold-for-facts — docs/LEDGER.md): entries older
+     * than `before_tick` collapse into exact per-label count summaries; each
+     * label's first-ever moment and anything matching a comma-separated `keep`
+     * pattern survive verbatim. Long-session hosts call this when the log
+     * crosses their budget. Returns entries removed. Never touches sim state.
+     * @param {bigint} before_tick
+     * @param {string} keep_csv
+     * @returns {number}
+     */
+    compact_log(before_tick, keep_csv) {
+        const ptr0 = passStringToWasm0(keep_csv, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.scope_compact_log(this.__wbg_ptr, before_tick, ptr0, len0);
+        return ret >>> 0;
+    }
+    /**
      * THE TILE WORLD: materialize the world tile at grid cell (tx, ty) — a fresh
      * copy of the spec's primary seed whose patch is [tx..tx+1, ty..ty+1]. The
      * global fields make adjacent tiles CONTINUOUS land; only the entity layer is

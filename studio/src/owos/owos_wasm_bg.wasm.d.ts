@@ -3,6 +3,7 @@
 export const memory: WebAssembly.Memory;
 export const __wbg_scope_free: (a: number, b: number) => void;
 export const scope_clear_intent: (a: number, b: number) => void;
+export const scope_compact_log: (a: number, b: bigint, c: number, d: number) => number;
 export const scope_ensure_tile: (a: number, b: number, c: number) => number;
 export const scope_flow_json: (a: number, b: number, c: number, d: number) => [number, number];
 export const scope_fold: (a: number, b: number) => void;
