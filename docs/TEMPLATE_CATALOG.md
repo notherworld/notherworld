@@ -2,7 +2,7 @@
 
 *The society/economy/activities blueprint: what to TEMPLATE (reusable JSON
 recipes over existing prims — same mechanism as `carved_plot_lots`) to finish
-Atlas-as-a-game and PIXELANTA. A template is captured know-how, not engine
+Atlas-as-a-game and the flagship. A template is captured know-how, not engine
 code: the engine never learns what a "shop" is. Every template ships with a
 `live`/probe gate before anything renders it (the house rule).*
 
@@ -53,7 +53,7 @@ grade (the atmosphere pass reads the SAME stat the sim uses — one truth).
   depends on exactly this template.)
 - **`property`** ✅ (plot lifecycle + Claim ledger exist): add `value` =
   f(district wealth, road_access, work) + a transfer action writing the ledger.
-  PIXELANTA's real-estate loop is this template alone.
+  The flagship's real-estate loop is this template alone.
 
 ## 3. Activities & places
 
@@ -64,7 +64,7 @@ grade (the atmosphere pass reads the SAME stat the sim uses — one truth).
 - **`gathering`** 🆕: rising-edge event when a venue crosses a busy threshold →
   spawns a short-lived `scene` scope (block party, service, game night) that
   boosts relationship formation. Emergent, not scheduled (⚠️ dodge).
-- **`crew`** 🆕 (kingdoms-lite, PIXELANTA-scale): shared claims + member edges
+- **`crew`** 🆕 (kingdoms-lite, city-scale): shared claims + member edges
   + territory rollup + status. Same grammar as kingdoms in the spec, sized to
   neighborhoods.
 
@@ -100,6 +100,6 @@ grade (the atmosphere pass reads the SAME stat the sim uses — one truth).
 
 Steps 1–5 make Atlas feel ALIVE (people with days, lit venues at night,
 prices that mean something) — that's the demo finish line. Steps 6–9 are
-PIXELANTA's game loop. Everything is `society.json` + templates; the engine
+the flagship's game loop. Everything is `society.json` + templates; the engine
 stays frozen unless a probe honestly finds a prim gap (⚠️ candidates: discrete
 items, at-time scheduling — both dodged by design above, tested separately).
