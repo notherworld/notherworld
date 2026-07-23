@@ -1,0 +1,164 @@
+{
+  "_note": "PACK: lure — temptation as gameplay (the stalker's mirror: pull them to YOU). The actor casts a lure whose pull each beast feels through its OWN affinity; tempted beasts drift in, strike when close+hungry+calm, and a strike is a catch. The cast SPLASH feeds the same alarm commons the flight pack listens to — cast too often and you spook the water.",
+  "_contract": {
+    "provides": [
+      "actor.lure",
+      "child.lure_s",
+      "actor:cast/wait_out",
+      "beast:tempted/strike/landed",
+      "catch/win events",
+      "arena.school"
+    ],
+    "requires": [
+      "child.alarm_s + actor.noise (pack_wind_alarm)",
+      "child.over_s (pack_clock)",
+      "beast stats: affinity, hunger, fear, boldness, distance, hooked=via individuals wounded slot? no — hooked/landed own stats (pack_individuals: wounded/down reused as hooked/landed)",
+      "arena stats: school=8, won=0 (manifest seed)"
+    ]
+  },
+  "rules": [
+    {
+      "on": "arena",
+      "set": "school",
+      "expr": "child_count() - 1"
+    },
+    {
+      "on": "actor",
+      "set": "lure",
+      "expr": "clamp(lure*0.9, 0, 1)"
+    }
+  ],
+  "rollups": [
+    {
+      "parent": "arena",
+      "child_stat": "lure",
+      "parent_stat": "lure_up",
+      "reduce": "max"
+    }
+  ],
+  "broadcasts": [
+    {
+      "parent_stat": "lure_up",
+      "child_stat": "lure_s",
+      "gain": 1.0
+    }
+  ],
+  "actions": [
+    {
+      "on": "actor",
+      "name": "cast",
+      "score": "lt(lure,0.3)*lt(over_s,0.5)*(0.6 + 0.4*chance(0.5))",
+      "effects": [
+        {
+          "op": "set",
+          "stat": "lure",
+          "expr": "1"
+        },
+        {
+          "op": "add",
+          "stat": "noise",
+          "expr": "0.35"
+        },
+        {
+          "op": "add",
+          "stat": "casts",
+          "expr": "1"
+        }
+      ]
+    },
+    {
+      "on": "actor",
+      "name": "wait_out",
+      "score": "gt(lure,0.25)*0.9",
+      "effects": [
+        {
+          "op": "add",
+          "stat": "patience",
+          "expr": "0.03"
+        },
+        {
+          "op": "set",
+          "stat": "noise",
+          "expr": "0.02"
+        }
+      ]
+    },
+    {
+      "on": "beast",
+      "name": "tempted",
+      "score": "lure_s*affinity*(0.4 + 0.6*hunger)*(1 - fear)*gt(distance,0.25)*1.2",
+      "effects": [
+        {
+          "op": "add",
+          "stat": "distance",
+          "expr": "-0.07*affinity"
+        }
+      ]
+    },
+    {
+      "on": "beast",
+      "name": "strike",
+      "score": "lure_s*gt(hunger,0.3)*lt(distance,0.3)*lt(fear,0.5)*(0.4 + 0.6*boldness)*affinity*3.5",
+      "effects": [
+        {
+          "op": "set",
+          "stat": "wounded",
+          "expr": "chance(0.35 + 0.5*affinity)"
+        }
+      ]
+    },
+    {
+      "on": "beast",
+      "name": "landed",
+      "score": "gt(wounded,0.5)*10",
+      "effects": [
+        {
+          "op": "despawn"
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "on": "beast",
+      "when": "gt(wounded,0.5)*lt(down,0.5)",
+      "label": "a strike — the line goes taut, and it's landed",
+      "do": [
+        {
+          "op": "set",
+          "stat": "down",
+          "expr": "1"
+        }
+      ]
+    },
+    {
+      "on": "arena",
+      "when": "lt(school,7.5)*lt(blood,0.5)",
+      "label": "first catch of the day",
+      "do": [
+        {
+          "op": "set",
+          "stat": "blood",
+          "expr": "1"
+        }
+      ]
+    },
+    {
+      "on": "arena",
+      "when": "lt(school,3.5)*lt(won,0.5)",
+      "label": "★ FIVE IN THE BUCKET BEFORE DUSK — the water gave",
+      "do": [
+        {
+          "op": "set",
+          "stat": "won",
+          "expr": "1"
+        },
+        {
+          "op": "set",
+          "stat": "over",
+          "expr": "1"
+        }
+      ]
+    }
+  ]
+}

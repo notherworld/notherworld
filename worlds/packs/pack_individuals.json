@@ -1,0 +1,29 @@
+{
+  "_note": "PACK: individuals — the crowd and the actor, every beast its own animal: THIS one hears better (hearing), THAT one is bolder (boldness), another likes the bait more (affinity). Golden rand(n) variation at spawn; everything downstream reads these.",
+  "_contract": {
+    "provides": ["arena→beast generator (8, individually varied)", "arena→actor generator (1)"],
+    "requires": ["arena seeded with reveal:true (manifest)"]
+  },
+  "generators": [
+    { "on": "arena", "spawn": "beast", "count": "8",
+      "child_stats": {
+        "hearing":  "0.2 + 0.7*rand(1)",
+        "boldness": "0.2 + 0.6*rand(2)",
+        "affinity": "0.2 + 0.7*rand(7)",
+        "fear":     "0.15 + 0.1*rand(3)",
+        "hunger":   "0.3 + 0.3*rand(4)",
+        "energy":   "0.7 + 0.3*rand(5)",
+        "distance": "0.45 + 0.45*rand(6)",
+        "took":     "0",
+        "wounded":  "0",
+        "marked":   "0",
+        "down":     "0",
+        "bolted":   "0"
+      } },
+    { "on": "arena", "spawn": "actor", "count": "1",
+      "child_stats": {
+        "stealth": "0.3", "patience": "0.4", "noise": "0.1",
+        "shots": "0", "learned": "0"
+      } }
+  ]
+}

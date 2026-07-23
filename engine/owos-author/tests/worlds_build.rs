@@ -27,6 +27,9 @@ fn showcase_worlds_build_and_run() {
         "worlds/trade.json",
         "worlds/citylife.json",
         "worlds/verang.json",
+        "worlds/hunt.json",
+        "worlds/hunt2.json",
+        "worlds/shore.json",
     ] {
         check(rel, 25);
     }

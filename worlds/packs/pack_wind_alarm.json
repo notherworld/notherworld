@@ -1,0 +1,19 @@
+{
+  "_note": "PACK: wind+alarm — the perception commons. Actor noise rolls up to an arena-wide alarm; wind (random walk) scales how far it carries; both broadcast down so every beast can hear with its OWN ears (pack_flight reads alarm_s * hearing).",
+  "_contract": {
+    "provides": ["arena.wind", "arena.alarm", "child.alarm_s", "child.wind_s", "actor.noise decay"],
+    "requires": ["arena stats: wind, alarm (manifest seed)", "actor stat: noise (pack_individuals)"]
+  },
+  "rules": [
+    { "on": "arena", "set": "wind",  "expr": "clamp(wind + 0.1*chance(0.5) - 0.1*chance(0.5), 0.05, 1)" },
+    { "on": "arena", "set": "alarm", "expr": "clamp(alarm*0.82 + 0.55*noise_up*(0.4 + 0.6*wind), 0, 1)" },
+    { "on": "actor", "set": "noise", "expr": "clamp(noise*0.65, 0, 1)" }
+  ],
+  "rollups": [
+    { "parent": "arena", "child_stat": "noise", "parent_stat": "noise_up", "reduce": "max" }
+  ],
+  "broadcasts": [
+    { "parent_stat": "alarm", "child_stat": "alarm_s", "gain": 1.0 },
+    { "parent_stat": "wind",  "child_stat": "wind_s",  "gain": 1.0 }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "_note": "THE GLADE, recomposed from packs — the regression proof: the same hunting game as worlds/hunt.json, but assembled as clock + wind_alarm + commons + individuals + flight + stalker with glade/deer/hunter aliases. If this is winnable AND losable under `live`, the pack library is real.",
+  "rng_seed": 47,
+  "aliases": { "arena": "glade", "beast": "deer", "actor": "hunter" },
+  "packs": ["pack_clock", "pack_wind_alarm", "pack_commons", "pack_individuals", "pack_flight", "pack_stalker"],
+  "seed": [
+    { "kind": "glade", "name": "Blackfern Glade", "reveal": true,
+      "stats": { "wind": 0.3, "alarm": 0.0, "grass": 0.9, "day": 0, "herd": 8, "won": 0, "over": 0 } }
+  ]
+}

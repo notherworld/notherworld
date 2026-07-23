@@ -1,0 +1,30 @@
+{
+  "_note": "PACK: flight — fear and what it does. Each beast's fear grows from the arena alarm scaled by ITS OWN hearing and the wind; high fear = flee (distance up, energy down), exhaustion = rest, idle = drift. The bolt event is the drama beat.",
+  "_contract": {
+    "provides": ["beast.fear", "beast:flee/rest/drift", "bolt event"],
+    "requires": ["child.alarm_s + child.wind_s (pack_wind_alarm)", "beast stats: hearing, energy, distance, bolted (pack_individuals)"]
+  },
+  "rules": [
+    { "on": "beast", "set": "fear",     "expr": "clamp(fear*0.88 + 0.9*alarm_s*hearing*(0.4 + 0.6*wind_s), 0, 1)" },
+    { "on": "beast", "set": "distance", "expr": "clamp(distance, 0.05, 1)" }
+  ],
+  "actions": [
+    { "on": "beast", "name": "flee",
+      "score": "gt(fear,0.6)*gt(energy,0.1)*1.6",
+      "effects": [
+        { "op": "add", "stat": "distance", "expr": "0.18" },
+        { "op": "add", "stat": "energy",   "expr": "-0.1" },
+        { "op": "add", "stat": "fear",     "expr": "-0.14" } ] },
+    { "on": "beast", "name": "rest",
+      "score": "lt(energy,0.35)*0.9",
+      "effects": [ { "op": "add", "stat": "energy", "expr": "0.12" } ] },
+    { "on": "beast", "name": "drift",
+      "score": "0.25 + 0.15*chance(0.5)",
+      "effects": [ { "op": "add", "stat": "distance", "expr": "0.12*chance(0.5) - 0.06" } ] }
+  ],
+  "events": [
+    { "on": "beast", "when": "gt(fear,0.75)*lt(bolted,0.5)",
+      "label": "one bolts — panic flashing through the crowd",
+      "do": [ { "op": "set", "stat": "bolted", "expr": "1" } ] }
+  ]
+}

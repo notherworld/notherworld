@@ -1,0 +1,63 @@
+{
+  "_note": "PACK: stalker — pursuit as gameplay. The actor marks a quarry (engine edge), creeps it closer, shoots with target-context hit odds; a gunshot floods the alarm. Player aiming rides the same rails: a host writes beast.marked and intents 'retarget'. Win = herd thinned by 3 before the clock pack's dusk.",
+  "_contract": {
+    "provides": ["quarry edge", "actor:mark_quarry/retarget/wait_still/creep/shoot", "beast:drop", "kill/win events", "arena.herd"],
+    "requires": ["child.alarm_s (pack_wind_alarm)", "child.over_s (pack_clock)", "beast stats: wounded, marked, down (pack_individuals)", "arena stats: herd=8, won=0 (manifest seed)"]
+  },
+  "rules": [
+    { "on": "arena", "set": "herd",   "expr": "child_count() - 1" },
+    { "on": "beast", "set": "marked", "expr": "clamp(marked*0.6, 0, 1)" }
+  ],
+  "rollups": [
+    { "parent": "arena", "child_stat": "marked", "parent_stat": "marked_up", "reduce": "max" }
+  ],
+  "broadcasts": [
+    { "parent_stat": "marked_up", "child_stat": "marked_s", "gain": 1.0 }
+  ],
+  "actions": [
+    { "on": "actor", "name": "mark_quarry",
+      "score": "lt(edge_count(quarry),1)*lt(over_s,0.5)*3",
+      "effects": [ { "op": "link", "stat": "quarry:beast" } ] },
+    { "on": "actor", "name": "retarget",
+      "score": "gt(marked_s,0.5)*lt(over_s,0.5)*6",
+      "effects": [
+        { "op": "unlink", "stat": "quarry" },
+        { "op": "link", "stat": "quarry:beast@max:target.marked" } ] },
+    { "on": "actor", "name": "wait_still",
+      "score": "gt(alarm_s,0.3)*1.4 + 0.12",
+      "effects": [
+        { "op": "add", "stat": "patience", "expr": "0.05" },
+        { "op": "set", "stat": "noise",    "expr": "0.02" } ] },
+    { "on": "actor", "name": "creep",
+      "score": "gt(edge_count(quarry),0)*lt(alarm_s,0.3)*lt(over_s,0.5)*(0.5 + 0.5*patience)",
+      "effects": [
+        { "op": "affect", "stat": "quarry:distance", "expr": "-0.055*(0.5 + stealth)" },
+        { "op": "add", "stat": "noise",    "expr": "0.08*(1 - stealth)" },
+        { "op": "add", "stat": "stealth",  "expr": "0.004*(1 - stealth)" },
+        { "op": "add", "stat": "patience", "expr": "0.025" } ] },
+    { "on": "actor", "name": "shoot",
+      "score": "gt(edge_count(quarry),0)*gt(patience,0.5)*lt(alarm_s,0.28)*lt(over_s,0.5)*chance(0.5)*1.3",
+      "effects": [
+        { "op": "affect", "stat": "quarry:wounded", "expr": "chance(0.35 + 0.4*stealth)*gt(0.24, target.distance)" },
+        { "op": "add", "stat": "shots",    "expr": "1" },
+        { "op": "add", "stat": "noise",    "expr": "0.9" },
+        { "op": "add", "stat": "patience", "expr": "-0.45" } ] },
+    { "on": "beast", "name": "drop",
+      "score": "gt(wounded,0.5)*10",
+      "effects": [ { "op": "despawn" } ] }
+  ],
+  "events": [
+    { "on": "beast", "when": "gt(wounded,0.5)*lt(down,0.5)",
+      "label": "a clean shot — one drops",
+      "do": [ { "op": "set", "stat": "down", "expr": "1" } ] },
+    { "on": "actor", "when": "gt(stealth,0.5)*lt(learned,0.5)",
+      "label": "the stalker learns the ground — footfalls go quiet",
+      "do": [ { "op": "set", "stat": "learned", "expr": "1" } ] },
+    { "on": "arena", "when": "lt(herd,7.5)*lt(blood,0.5)",
+      "label": "first blood",
+      "do": [ { "op": "set", "stat": "blood", "expr": "1" } ] },
+    { "on": "arena", "when": "lt(herd,5.5)*lt(won,0.5)",
+      "label": "★ THREE DOWN BEFORE DUSK — the hunt is won",
+      "do": [ { "op": "set", "stat": "won", "expr": "1" }, { "op": "set", "stat": "over", "expr": "1" } ] }
+  ]
+}

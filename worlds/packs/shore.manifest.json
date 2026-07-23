@@ -1,0 +1,33 @@
+{
+  "_note": "GREYWATER SHORE — a fishing game composed from FIVE REUSED hunt packs + ONE new one (lure). Same clock, same wind/alarm perception commons (a cast's splash spooks fish the way a gunshot spooks deer), same individual variation (affinity = 'this fish likes the lure more'), same fear/flight, same grazing (plankton). Only the lure pack is new. This file is the marketplace thesis in miniature.",
+  "rng_seed": 47,
+  "aliases": {
+    "arena": "shore",
+    "beast": "fish",
+    "actor": "angler"
+  },
+  "packs": [
+    "pack_clock",
+    "pack_wind_alarm",
+    "pack_commons",
+    "pack_individuals",
+    "pack_flight",
+    "pack_lure"
+  ],
+  "seed": [
+    {
+      "kind": "shore",
+      "name": "Greywater Shore",
+      "reveal": true,
+      "stats": {
+        "wind": 0.3,
+        "alarm": 0.0,
+        "grass": 0.9,
+        "day": 0,
+        "school": 8,
+        "won": 0,
+        "over": 0
+      }
+    }
+  ]
+}

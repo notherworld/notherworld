@@ -1,0 +1,18 @@
+{
+  "_note": "PACK: clock — a day that runs out. Generic vocab: arena. Provides arena.day, the dusk lose-event, and the over_s broadcast every other pack gates on.",
+  "_contract": {
+    "provides": ["arena.day", "arena.over", "child.over_s (broadcast)"],
+    "requires": ["arena stats: day=0, won=0, over=0 (manifest seed)"]
+  },
+  "rules": [
+    { "on": "arena", "set": "day", "expr": "day + 1" }
+  ],
+  "broadcasts": [
+    { "parent_stat": "over", "child_stat": "over_s", "gain": 1.0 }
+  ],
+  "events": [
+    { "on": "arena", "when": "gt(day,179.5)*lt(won,0.5)*lt(over,0.5)",
+      "label": "dusk falls — time is up, empty-handed",
+      "do": [ { "op": "set", "stat": "over", "expr": "1" } ] }
+  ]
+}

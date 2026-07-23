@@ -1,0 +1,26 @@
+{
+  "_note": "PACK: grazing commons — a shared food field that regrows and depletes (the emberhold pattern). Beasts get hunger + a graze action that draws it down (drain rollup) and pulls the bold ones closer to the arena's heart.",
+  "_contract": {
+    "provides": ["arena.grass", "child.grass_s", "beast.hunger", "beast:graze"],
+    "requires": ["arena stat: grass (manifest seed)", "beast stats: hunger, fear, boldness, took, energy, distance (pack_individuals)"]
+  },
+  "rules": [
+    { "on": "arena", "set": "grass",  "expr": "clamp(grass + 0.03*(1 - grass) - 0.06*graze_draw, 0.05, 1)" },
+    { "on": "beast", "set": "hunger", "expr": "clamp(hunger + 0.02, 0, 1)" }
+  ],
+  "rollups": [
+    { "parent": "arena", "child_stat": "took", "parent_stat": "graze_draw", "reduce": "sum", "drain": true }
+  ],
+  "broadcasts": [
+    { "parent_stat": "grass", "child_stat": "grass_s", "gain": 1.0 }
+  ],
+  "actions": [
+    { "on": "beast", "name": "graze",
+      "score": "gt(hunger,0.3)*(0.4 + 0.5*grass_s)*(1 - fear)",
+      "effects": [
+        { "op": "add", "stat": "hunger",   "expr": "-0.12" },
+        { "op": "set", "stat": "took",     "expr": "0.1" },
+        { "op": "add", "stat": "distance", "expr": "-0.04*boldness" },
+        { "op": "add", "stat": "energy",   "expr": "0.02" } ] }
+  ]
+}
