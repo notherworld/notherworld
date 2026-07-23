@@ -225,9 +225,14 @@ fn terra_fauna_ecosystem_lives() {
     assert!(distinct("torso").len() >= 2, "torso genome must vary across species");
     assert!(distinct("head").len() >= 2, "head genome must vary across species");
     assert!(distinct("pattern").len() >= 2, "pattern genome must vary across species");
+    // registry slot counts — bumped v2 (head 5→16, torso 5→12) + legs(4)/tail(5)
+    // added. These bounds ARE the version record: if creature.ts grows a registry,
+    // widen the genome floor() AND this range in the same pass (portrayal versioned).
     for &f in &all {
-        assert!(w.stat(f, "torso") >= 0.0 && w.stat(f, "torso") < 5.0, "torso index in TORSOS range");
-        assert!(w.stat(f, "head") >= 0.0 && w.stat(f, "head") < 5.0, "head index in HEADS range");
+        assert!(w.stat(f, "torso") >= 0.0 && w.stat(f, "torso") < 12.0, "torso index in TORSOS range");
+        assert!(w.stat(f, "head") >= 0.0 && w.stat(f, "head") < 16.0, "head index in HEADS range");
+        assert!(w.stat(f, "legs") >= 0.0 && w.stat(f, "legs") < 4.0, "legs index in LEGS range");
+        assert!(w.stat(f, "tail") >= 0.0 && w.stat(f, "tail") < 5.0, "tail index in TAILS range");
         assert!(w.stat(f, "pattern") >= 0.0 && w.stat(f, "pattern") < 3.0, "pattern index in PATTERNS range");
         assert!(w.stat(f, "height") > 0.0 && w.stat(f, "leglen") > 0.0, "stature genome present");
         assert!(w.stat(f, "hue2") > 0.0, "secondary hue present for the portrait accent");

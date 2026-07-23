@@ -4,7 +4,7 @@
 // design/creature.ts, it appears here immediately — this page is how you judge
 // whether a new part reads at 40×40 before it ships to a million planets.
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { drawCreature, drawSilhouette, TORSOS, HEADS, PATTERNS, type Stats } from '../design/creature';
+import { drawCreature, drawSilhouette, TORSOS, HEADS, LEGS, TAILS, PATTERNS, type Stats } from '../design/creature';
 import './parts.css';
 
 // which zoom tier(s) EVERY card renders — your call, page-wide. 'both' is the
@@ -88,6 +88,16 @@ export default function Parts() {
       <h2>heads <span className="pt-count">{HEADS.length}</span></h2>
       <div className="pt-grid">
         {HEADS.map((h, i) => <Card key={h.name} label={h.name} sub={`index ${i}`} stats={{ ...BASE, head: i }} />)}
+      </div>
+
+      <h2>legs <span className="pt-count">{LEGS.length}</span></h2>
+      <div className="pt-grid">
+        {LEGS.map((l, i) => <Card key={l.name} label={l.name} sub={`index ${i}`} stats={{ ...BASE, legs: i, flyer: 0 }} />)}
+      </div>
+
+      <h2>tails <span className="pt-count">{TAILS.length}</span></h2>
+      <div className="pt-grid">
+        {TAILS.map((t, i) => <Card key={t.name} label={t.name} sub={`index ${i}`} stats={{ ...BASE, tail: i }} />)}
       </div>
 
       <h2>patterns <span className="pt-count">{PATTERNS.length}</span></h2>

@@ -33,7 +33,7 @@ import { makeScopeMap, localToScreenWith, regionCells, cellsCenter, type ScopeMa
 // its own). The old city/ demo is untouched; this is the portable "same engine,
 // our data" path.
 import worldSpec from './world.json';
-import { drawSilhouette } from '../design/creature';   // ONE compositor — the same fn /bestiary.html draws with
+import { drawSilhouette, commonName } from '../design/creature';   // ONE compositor — the same fn /bestiary.html draws with
 import './terra.css';
 // ⤓ EXPLORE ARRIVAL — how a notherspace body lands here as a REAL world. The
 // address chain seeds it; templeFor applies the visitor's universe charter
@@ -196,6 +196,7 @@ export default function Terra() {
   // entry). Ref + version counter so the HUD only re-renders when knowledge changes.
   const codexRef = useRef<Map<string, {
     species: number; gene: number; size: number; hue: number; diet: number; nocturnal: number;
+    stats: Record<string, number>;   // full genome — for the portrait + common name
     seen: number; caught: number; acts: Set<string>; extinct: boolean;
   }>>(new Map());
   const [codexV, setCodexV] = useState(0);
@@ -286,7 +287,7 @@ export default function Terra() {
         const key = `${f.species}:${f.gene.toFixed(3)}`;
         let e = cx.get(key);
         if (!e) {
-          e = { species: f.species, gene: f.gene, size: f.size, hue: f.hue, diet: f.diet, nocturnal: f.nocturnal, seen: 0, caught: 0, acts: new Set(), extinct: false };
+          e = { species: f.species, gene: f.gene, size: f.size, hue: f.hue, diet: f.diet, nocturnal: f.nocturnal, stats: f.stats, seen: 0, caught: 0, acts: new Set(), extinct: false };
           cx.set(key, e);
           changed = true;
         }
@@ -3578,7 +3579,7 @@ const ACT_NOTES: Record<string, string> = {
   hunt: 'stalks smaller creatures',
 };
 function CodexPanel({ entries, v, onClose }: {
-  entries: { species: number; gene: number; size: number; hue: number; diet: number; nocturnal: number; seen: number; caught: number; acts: Set<string>; extinct: boolean }[];
+  entries: { species: number; gene: number; size: number; hue: number; diet: number; nocturnal: number; stats: Record<string, number>; seen: number; caught: number; acts: Set<string>; extinct: boolean }[];
   v: number; onClose: () => void;
 }) {
   void v; // version counter forces re-render as knowledge grows
@@ -3607,7 +3608,10 @@ function CodexPanel({ entries, v, onClose }: {
                 background: col, borderRadius: 3, display: 'inline-block', flexShrink: 0,
                 outline: e.extinct ? '1px solid rgba(255,120,120,0.7)' : undefined,
               }} />
-              <strong>{speciesName(e.species, e.gene)}</strong>
+              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+                <strong style={{ textTransform: 'capitalize' }}>{commonName(e.stats)}</strong>
+                <em style={{ opacity: 0.6, fontSize: 11 }}>{speciesName(e.species, e.gene)}</em>
+              </div>
               {e.extinct && <span style={{ color: '#ff9a9a', fontSize: 11 }}>extinct</span>}
               {!documented && <span style={{ opacity: 0.5, fontSize: 11 }}>undocumented</span>}
             </div>
