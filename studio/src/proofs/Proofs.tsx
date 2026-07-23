@@ -7,6 +7,7 @@
 // the worlds right now.
 import { useState } from 'react';
 import { createWorld, type Snapshot } from '../owos';
+import { starOf, planetOf } from '../view/facts';
 import hotelSpec from '../../../worlds/hotel.json';
 import craftSpec from '../../../worlds/craft.json';
 import emberholdSpec from '../../../worlds/emberhold.json';
@@ -212,6 +213,76 @@ const PROOFS: Proof[] = [
       const b = fingerprint(await runWorld(alt, 120));
       if (a === b) throw new Error('changing the seed changed nothing — generation is not seed-driven');
       return 'seed 999 produced a genuinely different history than the authored seed';
+    },
+  },
+  {
+    id: 'lifecamo',
+    title: 'the life scan guides you — and never gives the game away',
+    what:
+      'Samples the life fact sheet for ~100k addressed worlds and checks the readout is decoupled from the truth in BOTH directions: a real share of "none detected" worlds are SECRETLY alive (so a dull reading is never a safe skip); a real share of "favorable"-reading worlds are actually EMPTY (the dead teaser — a hopeful reading is never a promise); every "likely impossible" world that is alive stays below the detection threshold (the extremophile is always sparse); the bands still meaningfully rank the odds; life abundance tracks the conditions band; and the detector itself MALFUNCTIONS rarely in both directions (a confident "signs detected" over a dead world, a flat reading over a teeming one) — small but nonzero, so even a confirmed detection is never 100%.',
+    why:
+      'A planet has three quantities: the CONDITIONS band (all the orbital scan knows) and two the engine hides — whether life exists, and HOW MUCH. The scan reads "signs detected" only when life is present AND abundant enough to see; below that, every world reads by its conditions band alone. The presence odds are decoupled from conditions BOTH ways — a sparse living world and a dead one are indistinguishable from orbit, and a favorable world can still be barren. On top of the honest-but-incomplete scan sits a rare INSTRUMENT FAULT: the detector occasionally lies outright. That last part is equipment, not world — a fixed per-address roll thresholded by scanner fidelity, so a better scanner (a future upgrade) strictly shrinks the set of worlds that lie to you, and a misread world stays misread until you can afford the truth. The scan saves you time statistically without ever letting you — or the designer — write a world off from orbit.',
+    native: '(facts.ts::planetOf — the same derivation nother reads)',
+    run: async () => {
+      let rocky = 0, alive = 0;
+      let hidEmpty = 0, hidAlive = 0;               // "none detected" worlds that secretly have life
+      let favReads = 0, favEmpty = 0;               // favorable-reading worlds that are actually dead (teaser)
+      let impAlive = 0, impAliveOverThreshold = 0;  // extremophiles must always be sparse (undetectable)
+      let sawDetected = 0, falsePos = 0;            // MALFUNCTION: "signs detected" over a truly dead world
+      let trulyDetectable = 0, falseNeg = 0;        // MALFUNCTION: dull/impossible reading over a teeming world
+      const bandDens: Record<string, { n: number; sum: number }> = {};
+      const DETECT = 0.45;
+      for (let s = 1; s < 24000; s++) {
+        const sseed = (Math.imul(s, 2654435761) >>> 0);
+        const star = starOf(sseed);
+        for (let i = 0; i < star.planets; i++) {
+          const pseed = (Math.imul(sseed ^ (i + 1), 0x9e3779b1) >>> 0);
+          const p = planetOf(pseed, i, star);
+          if (p.type.includes('giant')) continue;
+          rocky++;
+          if (p.hasLife) alive++;
+          const label = p.life;
+          if (label.startsWith('none detected')) {           // any dull reading
+            hidEmpty++;
+            if (p.hasLife) hidAlive++;                        // …that's secretly alive
+          }
+          if (label.includes('favorable') || label === 'signs detected') {
+            favReads++;                                       // reads hopeful from orbit
+            if (!p.hasLife) favEmpty++;                       // …but is actually barren (teaser)
+          }
+          if (label === 'likely impossible' && p.hasLife) {
+            impAlive++;
+            if (p.density > DETECT) impAliveOverThreshold++;
+          }
+          // MALFUNCTION rates (measured off the reported label vs the hidden truth):
+          // a false positive reads "signs detected" over a dead world; a false
+          // negative reads dull/impossible over a world that WAS detectable-true.
+          if (label === 'signs detected') { sawDetected++; if (!p.hasLife) falsePos++; }
+          if (p.hasLife && p.density > DETECT) { trulyDetectable++; if (label !== 'signs detected') falseNeg++; }
+          const band = label.includes('favorable') || label === 'signs detected' ? 'favorable'
+            : label.includes('possible') ? 'possible'
+            : label.includes('unlikely') ? 'unlikely' : 'impossible';
+          if (p.hasLife) { (bandDens[band] ??= { n: 0, sum: 0 }).n++; bandDens[band].sum += p.density; }
+        }
+      }
+      const alivePct = (100 * alive) / rocky;
+      const camoPct = hidEmpty ? (100 * hidAlive) / hidEmpty : 0;
+      const teaserPct = favReads ? (100 * favEmpty) / favReads : 0;
+      if (alivePct < 45 || alivePct > 70) throw new Error(`life on ${alivePct.toFixed(0)}% of rocky worlds — expected ~50-60% (a coin-flip-plus, bands tilting it)`);
+      if (camoPct < 15) throw new Error(`only ${camoPct.toFixed(1)}% of "none detected" worlds secretly hide life — a dull reading is a giveaway`);
+      if (teaserPct < 8) throw new Error(`only ${teaserPct.toFixed(1)}% of favorable-reading worlds are empty — a hopeful reading is a promise, not a bet`);
+      if (impAliveOverThreshold > 0) throw new Error(`${impAliveOverThreshold} extremophile worlds read detectable — an impossible world must never scan as alive`);
+      const df = bandDens.favorable ? bandDens.favorable.sum / bandDens.favorable.n : 0;
+      const du = bandDens.unlikely ? bandDens.unlikely.sum / bandDens.unlikely.n : 0;
+      if (!(df > du + 0.1)) throw new Error(`favorable density (${df.toFixed(2)}) doesn't clearly beat unlikely (${du.toFixed(2)}) — density doesn't track conditions`);
+      // MALFUNCTION: the detector lies rarely in BOTH directions. Bounded — a real
+      // instrument fault, not a pattern (and not zero: even a confirmed detection is
+      // never 100%). Both rates must be small but nonzero at the default fidelity.
+      const fpPct = sawDetected ? (100 * falsePos) / sawDetected : 0;
+      const fnPct = trulyDetectable ? (100 * falseNeg) / trulyDetectable : 0;
+      if (fpPct < 0.5 || fpPct > 6) throw new Error(`false-positive detections ${fpPct.toFixed(1)}% — malfunction should be rare (~1-3%), not ${fpPct > 6 ? 'common' : 'absent'}`);
+      if (fnPct < 0.5 || fnPct > 6) throw new Error(`false-negative readings ${fnPct.toFixed(1)}% — malfunction should be rare (~1-3%), not ${fnPct > 6 ? 'common' : 'absent'}`);
+      return `${alivePct.toFixed(0)}% of rocky worlds alive · ${camoPct.toFixed(0)}% of "none detected" secretly alive (no safe skip) · ${teaserPct.toFixed(0)}% of favorable readings are dead teasers (no promise) · scanner lies ~${fpPct.toFixed(1)}% false-positive / ~${fnPct.toFixed(1)}% false-negative (rare instrument fault) · 0 extremophiles ever detectable · density tracks band (fav ${df.toFixed(2)} > unl ${du.toFixed(2)})`;
     },
   },
 ];

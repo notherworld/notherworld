@@ -70,24 +70,36 @@
     }
   },
 
+  "_planet_laws_note": "PLANET LAWS (bestiary vocabulary — same names + directions as worlds/bestiary.json, so one address describes ONE planet across every page). Terra is the DEFAULT world; here the laws are constants (the fallback), but composeSpecFor (temple/templates.ts) OVERRIDES them per-address from bodyLaws() so no two addresses roll the same life. `heat` is the PLANET BASELINE temperature (is this world survivable un-suited at all) — a cold planet grows fur everywhere; local district warmth (below) varies AROUND this baseline, so a hot planet's coolest quarter is still hot. `air` breeds flyers (thin air → more, `clamp(1.35-1.55*air)`), `gravity` caps size + low-slungs striders, `lush` sets herd size. These flow city→district so a fauna reads `parent.air`/`parent.heat` etc. — the exact soul /bestiary.html draws.",
   "seed": [
     { "kind": "city", "name": "Veranholm", "reveal": true,
-      "stats": { "heat": 0.2, "wealth": 0.5, "hour": 8, "day": 0, "is_night": 0, "is_work": 1 } }
+      "stats": { "wealth": 0.5, "hour": 8, "day": 0, "is_night": 0, "is_work": 1,
+                 "air": 0.55, "gravity": 0.5, "heat": 0.55, "lush": 0.7, "life_density": 1 } }
   ],
 
   "generators": [
-    { "_note": "FAUNA — wildlife as data. One kind; a critter's STATS are its species. `species` is a small integer; every trait hashes species + the district's `gene` (golden-ratio fold), so all members of a species in a region look/act alike, species differ from each other, and the SAME species reads differently in the next region — regional variation for free. Wooded/grassy districts teem; dense stone ones are sparse. Births spawn-inherit (a calf IS its species), so demography is real and extinction is permanent (see probe_hunt).",
+    { "_note": "FAUNA — wildlife as data, and the SAME GENOME the /bestiary.html portrait draws (the 'one soul at every LOD' law). A critter's STATS are its species; every BODY-PLAN trait is a golden-ratio hash of (species, district `gene`) BENT BY THE PLANET'S LAWS (parent.air/gravity/heat/lush, flowed city→district above) — verbatim the formulas in worlds/bestiary.json. So all members of a species in a region look/act alike, species differ, the SAME species reads differently in the next region (regional variation for free), and thin air breeds flyers / heavy gravity low-slungs striders / cold grows fur — provably, across the planet. The renderer stamps these with design/creature.ts drawSilhouette (the exact fn the bestiary portrait composes), so the in-world critter and its codex portrait are literally one genome. Wooded/grassy districts teem; dense stone ones are sparse. Births spawn-inherit (a calf IS its species), so demography is real and extinction is permanent (see probe_hunt).",
       "on": "district", "spawn": "fauna",
-      "count": "floor(2 + 7*clamp(wooded_frac + grassy_frac, 0, 1) + 2*rand(41))",
+      "_count_note": "FAUNA COUNT scales by life_density (the engine-only MAGNITUDE flowed from the orbital fact sheet, city→district). A teeming world (density 1) spawns the full biome-driven count; a sparse hidden-life world (density ~0.1) spawns a handful across many districts — some districts empty — so FINDING the creature is the gameplay on a world the scan called dead. Base Veranholm density=1, unchanged. The +0.4 floor on the multiplier keeps a living world from rounding to a ghost town, while a genuinely near-zero density still empties most districts.",
+      "count": "floor(life_density * (2 + 7*clamp(wooded_frac + grassy_frac, 0, 1) + 2*rand(41)))",
       "child_stats": {
         "species":   "floor(5.99 * rand(50))",
         "gene":      "parent.gene",
-        "size":      "0.3 + 0.6*mod(species*0.618 + gene, 1)",
-        "hue":       "mod(species*0.317 + gene*2.3, 1)",
+        "flyer":     "lt(mod(species*0.618 + gene, 1), clamp(1.35 - 1.55*parent.air, 0, 0.9))",
+        "size":      "clamp(0.2 + 0.8*mod(species*0.317 + gene*2.3, 1) - 0.38*parent.gravity, 0.12, 1)",
+        "height":    "clamp(0.25 + 0.75*mod(species*0.911 + gene*1.1, 1) - 0.42*parent.gravity, 0.1, 1)",
+        "leglen":    "iff(flyer, 0.15, clamp(0.25 + 0.75*mod(species*0.451 + gene*3.1, 1) - 0.5*parent.gravity, 0.08, 1))",
+        "fur":       "clamp(mod(species*0.271 + gene*1.3, 1) + (0.45 - parent.heat)*0.8, 0, 1)",
+        "torso":     "floor(4.99 * mod(species*0.777 + gene*1.7, 1))",
+        "head":      "floor(4.99 * mod(species*0.531 + gene*0.9, 1))",
+        "pattern":   "floor(2.99 * mod(species*0.687 + gene*2.9, 1))",
+        "hue":       "mod(species*0.161 + gene*4.7, 1)",
+        "hue2":      "mod(hue + 0.33 + 0.2*mod(species*0.87, 1), 1)",
+        "temper":    "mod(species*0.731 + gene*0.6, 1)",
         "speed":     "0.2 + 0.8*mod(species*0.777 + gene*1.7, 1)",
-        "diet":      "mod(species*0.451 + gene*3.1, 1)",
+        "diet":      "mod(species*0.351 + gene*1.9, 1)",
         "shy":       "mod(species*0.271 + gene*1.3, 1)",
-        "nocturnal": "gt(mod(species*0.531 + gene*0.9, 1), 0.62)",
+        "nocturnal": "gt(mod(species*0.431 + gene*2.1, 1), 0.62)",
         "px":        "0.08 + 0.84*rand(51)",
         "py":        "0.08 + 0.84*rand(52)",
         "food":      "0.5 + 0.3*rand(53)",
@@ -108,7 +120,7 @@
           "dry":    "field(dry, fx, fy)",
           "rock":   "or(field(rock, fx, fy), field(steeper, fx, fy))"
         } },
-      "_child_stats_note": "child_stats evaluate TOP-TO-BOTTOM against the child, so later formulas read earlier stats by name (angle/radius/spread → cx/cy → elev). No repeated sub-expressions.",
+      "_child_stats_note": "child_stats evaluate TOP-TO-BOTTOM against the child, so later formulas read earlier stats by name (angle/radius/spread → cx/cy → elev). No repeated sub-expressions. TWO TEMPERATURES, deliberately distinct: `warmth` is LOCAL urban comfort (downtown runs hotter, the fringe cooler) and it varies AROUND the planet baseline `parent.heat` — so a scorching planet's coolest quarter is still hot, a temperate one has a mild-to-warm spread; the settlement reads warmth (busy, HUD, district hue, weather diffusion). `heat`/`air`/`gravity`/`lush` flow city→district under bestiary's OWN names so the FAUNA genome reads parent.heat/parent.air exactly as worlds/bestiary.json does (one address = one planet across every page). `heat` is the whole-planet baseline the fur law reads, NOT the urban warmth.",
       "child_stats": {
         "angle":     "index * 2 * pi() / 7 + 0.18*rand(9)",
         "ring":      "iff(eq(index,0), 0, 1)",
@@ -117,13 +129,18 @@
         "cx":        "0.5 + radius * cos(angle) * 0.5",
         "cy":        "0.5 + radius * sin(angle) * 0.5",
         "density":   "iff(eq(index,0), 0.95, clamp(0.75 - 0.5*spread + 0.15*rand(2), 0.15, 1))",
-        "heat":      "iff(eq(index,0), 0.7 + 0.2*rand(3), clamp(0.5 - 0.4*spread + 0.2*rand(3), 0.05, 0.9))",
+        "warmth":    "clamp(parent.heat + iff(eq(index,0), 0.15 + 0.1*rand(3), -0.15 - 0.25*spread + 0.2*rand(3)), 0, 1)",
         "wealth":    "clamp(0.25 + 0.55*spread + 0.15*(rand(4)-0.5), 0.1, 0.95)",
         "character": "rand(5)",
         "gene":      "rand(40)",
         "elev":      "field(elevation, cx, cy)",
         "cloud_density": "field(cloud, cx, cy)",
-        "raining":       "0"
+        "raining":       "0",
+        "air":       "parent.air",
+        "gravity":   "parent.gravity",
+        "heat":      "parent.heat",
+        "lush":      "parent.lush",
+        "life_density": "parent.life_density"
       }
     },
 
@@ -135,7 +152,7 @@
         "parcel":   "1 + floor(rand(6)*rand(6)*5)",
         "wealth":   "parent.wealth + 0.15*(rand(1)-0.5)",
         "mix":      "clamp(0.5 + 0.5*parent.hill_frac - 0.7*parent.shore_frac + 0.2*(rand(2)-0.5), 0, 1)",
-        "busy":     "clamp(0.3 + 0.4*parent.shore_frac + 0.3*parent.heat + 0.3*rand(3), 0, 1)"
+        "busy":     "clamp(0.3 + 0.4*parent.shore_frac + 0.3*parent.warmth + 0.3*rand(3), 0, 1)"
       }
     },
 
@@ -333,8 +350,8 @@
   ],
 
   "coarse_rules": [
-    { "on": "district", "set": "heat",
-      "expr": "clamp(heat + 0.012*(edge_mean(border, heat) - heat), 0, 1)" }
+    { "on": "district", "set": "warmth",
+      "expr": "clamp(warmth + 0.012*(edge_mean(border, warmth) - warmth), 0, 1)" }
   ],
 
   "rules": [
@@ -348,8 +365,8 @@
     { "on": "city", "set": "is_night", "expr": "clamp(ge(hour,22) + lt(hour,6), 0, 1)" },
     { "on": "city", "set": "is_work",  "expr": "gt(hour,8)*lt(hour,18)" },
 
-    { "on": "district", "set": "heat",
-      "expr": "clamp(heat + 0.012*(edge_mean(border, heat) - heat), 0, 1)" },
+    { "on": "district", "set": "warmth",
+      "expr": "clamp(warmth + 0.012*(edge_mean(border, warmth) - warmth), 0, 1)" },
     { "on": "occupant", "set": "mood",
       "expr": "clamp(mood + 0.015*gt(energy,0.4) - 0.02*lt(energy,0.2) + 0.02*gt(here_count(),0)*sociable, 0, 1)" },
     { "on": "occupant", "set": "energy",
@@ -385,7 +402,7 @@
     { "on": "building", "set": "souls", "expr": "child_sum(souls) + child_count()" },
     { "on": "district", "set": "life",  "expr": "child_count()" },
 
-    { "_vitality_note": "★ DISTRICT VITALITY (0..1) — the macro health that decides whether the whole district is being kept up. Starts healthy (an existing, living community) and stays high while the district thrives; drops when the place FAILS (a stat like heat/wealth collapsing, or an authored decline event). A district whose vitality craters loses upkeep across ALL its plots AT ONCE → people-sparse → work decays → buildings overgrow → plots revert. The failing-city → wilderness cascade, from one coarse dial. Gentle drift toward a wealth-driven target so a poor district is more fragile; wire an event to slam it to 0 to watch a district die. Runs coarse (per-tick, every LOD) so decline is real even at city zoom.",
+    { "_vitality_note": "★ DISTRICT VITALITY (0..1) — the macro health that decides whether the whole district is being kept up. Starts healthy (an existing, living community) and stays high while the district thrives; drops when the place FAILS (a stat like warmth/wealth collapsing, or an authored decline event). A district whose vitality craters loses upkeep across ALL its plots AT ONCE → people-sparse → work decays → buildings overgrow → plots revert. The failing-city → wilderness cascade, from one coarse dial. Gentle drift toward a wealth-driven target so a poor district is more fragile; wire an event to slam it to 0 to watch a district die. Runs coarse (per-tick, every LOD) so decline is real even at city zoom.",
       "on": "district", "set": "vitality",
       "expr": "clamp(iff(eq(vitality,0), 0.85, vitality) + 0.02*((0.55 + 0.45*wealth) - vitality), 0, 1)" },
     { "_block_vitality_note": "vitality PROJECTED onto the block, because a BUILDING's parent is its BLOCK (building→block→district), so a building's `upkeep` rule reads `parent.vitality` = the BLOCK's copy. The block just mirrors its district's vitality down one level (parent.vitality here = the district's). One hop so the plot-level gate can read it as parent.vitality.",

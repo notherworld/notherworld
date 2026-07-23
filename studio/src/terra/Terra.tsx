@@ -33,16 +33,21 @@ import { makeScopeMap, localToScreenWith, regionCells, cellsCenter, type ScopeMa
 // its own). The old city/ demo is untouched; this is the portable "same engine,
 // our data" path.
 import worldSpec from './world.json';
+import { drawSilhouette } from '../design/creature';   // ONE compositor — the same fn /bestiary.html draws with
 import './terra.css';
 // ⤓ EXPLORE ARRIVAL — how a notherspace body lands here as a REAL world. The
 // address chain seeds it; templeFor applies the visitor's universe charter
 // (galaxy/system/body variance included). No hash → plain Veranholm, unchanged.
 // Uninhabited templates are forced 'settled' until the geology-only mode lands.
 import { templeFor, composeSpecFor, bodyLaws, type SurfaceTemplate, type BodyLaws } from '../temple/templates';
-const ARRIVAL: { tpl: SurfaceTemplate; seed: number; laws: BodyLaws; settled: boolean; name: string; note: string } | null = (() => {
-  const m = location.hash.match(/^#x=([^~]+)~(-?\d+)~(-?\d+)~(-?\d+)~(-?\d+)~([01])~(.*)$/);
+const ARRIVAL: { tpl: SurfaceTemplate; seed: number; laws: BodyLaws; settled: boolean; density: number; name: string; note: string } | null = (() => {
+  // …~<settled 0|1>~<name>[~d<density×100>]  — density is an OPTIONAL trailing
+  // segment (older links + moons/roids omit it → 0). It's the engine-only life
+  // MAGNITUDE, carried from the orbital fact sheet so the surface can spawn the
+  // right amount of fauna. Never shown; it only shapes how much you find.
+  const m = location.hash.match(/^#x=([^~]+)~(-?\d+)~(-?\d+)~(-?\d+)~(-?\d+)~([01])~([^~]*)(?:~d(\d+))?$/);
   if (!m) return null;
-  const [, nk, u, g, s, b, lf, nm] = m;
+  const [, nk, u, g, s, b, lf, nm, dens] = m;
   const r = templeFor({ u: +u, g: +g, s: +s, b: +b }, nk);
   const seed = Math.abs(((+b | 0) ^ ((+u | 0) * 31)) % 999983) || 7;
   return {
@@ -50,6 +55,7 @@ const ARRIVAL: { tpl: SurfaceTemplate; seed: number; laws: BodyLaws; settled: bo
     seed,
     laws: bodyLaws(seed, nk),          // ITS liquid coverage, ice line, relief — from ITS address
     settled: lf === '1',               // life fact → whether anyone ever built here
+    density: dens ? Math.min(1, +dens / 100) : 0,   // life abundance (0 if link omits it)
     name: decodeURIComponent(nm), note: r.note,
   };
 })();
@@ -139,7 +145,7 @@ export default function Terra() {
         // field chain, and its LIFE fact decides whether settlements exist at
         // all (no life → no districts, no roads, no bridges — nobody built them)
         const spec = ARRIVAL
-          ? composeSpecFor(ARRIVAL.tpl, sd, ARRIVAL.laws, ARRIVAL.settled)
+          ? composeSpecFor(ARRIVAL.tpl, sd, ARRIVAL.laws, ARRIVAL.settled, ARRIVAL.density)
           : { ...(worldSpec as object), rng_seed: sd };
         const t0 = performance.now();
         const w = await createWorld(JSON.stringify(spec));
@@ -180,6 +186,9 @@ export default function Terra() {
     wx0: number; wy0: number; wx1: number; wy1: number; id: number;
     species: number; gene: number; size: number; hue: number; diet: number;
     nocturnal: number; act: string | null; live: boolean;
+    // body-plan genome (the SAME stats /bestiary.html draws) — carried so the
+    // in-world stamp composes through design/creature.ts, one soul at every LOD.
+    stats: Record<string, number>;
   }[]>([]);
   const faunaPrevRef = useRef<Map<number, { wx: number; wy: number }>>(new Map());
   // THE CODEX — what the naturalist has personally observed, keyed per species+region
@@ -261,6 +270,7 @@ export default function Terra() {
           size: e.stats.size ?? 0.5, hue: e.stats.hue ?? 0, diet: e.stats.diet ?? 0,
           nocturnal: e.stats.nocturnal ?? 0, act: e.last_action,
           live: e.active,   // parked (coarse-band) wildlife is an idea, not a target
+          stats: e.stats,   // full genome — drawSilhouette/drawCreature read it directly
         });
         fprev.set(e.id, { wx, wy });
         fseen.add(e.id);
@@ -3355,49 +3365,52 @@ export default function Terra() {
         }
       }
 
-      // ---- FAUNA — wildlife stamped from district zoom down. A critter is a
-      // pixel body in its species' colour (hue+size are species genes), a darker
-      // head toward travel, and a foot shadow. Predators get a warmer, redder
-      // cast. Glides on the same 700ms hop as people.
+      // ---- FAUNA — wildlife stamped from district zoom down, through the ONE
+      // compositor design/creature.ts::drawSilhouette — the exact fn /bestiary.html
+      // composes for the portrait. So the in-world critter and its codex portrait
+      // are provably the same genome (torso proportion, stature, flyer lift, hue),
+      // just at the block LOD (no fine parts). "Same soul at every LOD." A foot
+      // shadow, parked-dimming and glide (the 700ms people-hop) stay terra's.
       const crit = faunaRef.current;
       if (crit.length && RSC > 1.15) {
         const fGl = Math.min(1, (t - peopleT0Ref.current) / 700);
+        const scale = Math.min(RSC, 6) * 0.55;
         for (const cA of crit) {
           const sc = scopeMap.toS(cA.wx0 + (cA.wx1 - cA.wx0) * fGl, cA.wy0 + (cA.wy1 - cA.wy0) * fGl);
           const fx = Math.round(sc.x), fy = Math.round(sc.y);
-          const BW = Math.max(2, Math.round((1.2 + cA.size * 2.6) * Math.min(RSC, 6) * 0.55));
-          const BH = Math.max(2, Math.round(BW * 0.62));
-          if (fx < 2 || fy < BH + 1 || fx >= GRID - 2 || fy >= GRID - 1) continue;
+          // room for the tallest a silhouette reaches up from the foot point
+          const reach = Math.round((6 + cA.size * 6) * scale) + 2;
+          if (fx < 2 || fy < reach || fx >= GRID - 2 || fy >= GRID - 1) continue;
           if (isWater[fy * GRID + fx]) continue;
-          // species colour from its hue gene (predators pull toward rust)
-          const h6 = cA.hue * 6;
-          const base: RGB = [
-            Math.round(120 + 100 * Math.abs(Math.sin(h6))),
-            Math.round(95 + 90 * Math.abs(Math.sin(h6 + 2.1))),
-            Math.round(80 + 95 * Math.abs(Math.sin(h6 + 4.2))),
-          ];
-          let body: RGB = cA.diet > 0.72 ? mixToward(base, [188, 92, 70], 0.4) : base;
-          if (!cA.live) body = mixToward(body, [40, 44, 60], 0.5);   // parked wildlife: a dimmed idea
-          const belly = mixToward(body, [235, 228, 205], 0.35);
-          const dirR = cA.wx1 >= cA.wx0;                       // facing from travel
-          const x0 = fx - (BW >> 1), y0 = fy - BH;
-          for (let ox = 0; ox < BW; ox++) {                    // foot shadow
-            const gx = x0 + ox; if (gx < 0 || gx >= GRID) continue;
+
+          // foot shadow (terra flavour) — a short darkened smear under the critter
+          const shW = Math.max(2, Math.round((2 + cA.size * 3) * scale));
+          for (let ox = -(shW >> 1); ox <= shW >> 1; ox++) {
+            const gx = fx + ox; if (gx < 0 || gx >= GRID) continue;
             const k4 = (fy * GRID + gx) * 4;
             data[k4] *= 0.78; data[k4 + 1] *= 0.78; data[k4 + 2] *= 0.78;
           }
-          for (let oy = 0; oy < BH; oy++) {
-            const gy = y0 + oy; if (gy < 0 || gy >= GRID) continue;
-            const rounded = (oy === 0 && BW >= 4) ? 1 : 0;
-            for (let ox = rounded; ox < BW - rounded; ox++) {
-              const gx = x0 + ox; if (gx < 0 || gx >= GRID) continue;
-              const isHead = dirR ? ox >= BW - Math.max(1, BW >> 2) : ox < Math.max(1, BW >> 2);
-              const isBelly = oy >= BH - 1 && !isHead;
-              const c: RGB = isHead ? mixToward(body, [30, 26, 34], 0.35) : isBelly ? belly : body;
-              const k4 = (gy * GRID + gx) * 4;
-              data[k4] = c[0]; data[k4 + 1] = c[1]; data[k4 + 2] = c[2]; data[k4 + 3] = 255;
+
+          // px-shim: drawSilhouette emits rect-fills in hsl() strings; write them
+          // into the bake buffer. Parked wildlife dims toward night-blue (an idea,
+          // not a target); predators (diet>0.72) keep a faint warm push via lerp.
+          const dim = cA.live ? 0 : 0.5;
+          const px = (x: number, y: number, w: number, hgt: number, col: string) => {
+            let [r, g, b] = hslStrToRgb(col);
+            if (cA.diet > 0.72) { r = lerp(r, 188, 0.22); g = lerp(g, 92, 0.22); b = lerp(b, 70, 0.22); }
+            if (dim) { r = lerp(r, 40, dim); g = lerp(g, 44, dim); b = lerp(b, 60, dim); }
+            const x0 = Math.round(x), y0 = Math.round(y);
+            const x1 = x0 + Math.max(1, Math.round(w)), y1 = y0 + Math.max(1, Math.round(hgt));
+            for (let gy = y0; gy < y1; gy++) {
+              if (gy < 0 || gy >= GRID) continue;
+              for (let gx = x0; gx < x1; gx++) {
+                if (gx < 0 || gx >= GRID || isWater[gy * GRID + gx]) continue;
+                const k4 = (gy * GRID + gx) * 4;
+                data[k4] = clampByte(r); data[k4 + 1] = clampByte(g); data[k4 + 2] = clampByte(b); data[k4 + 3] = 255;
+              }
             }
-          }
+          };
+          drawSilhouette(px, fx, fy, cA.stats, scale);
         }
       }
 
@@ -3644,7 +3657,7 @@ function Hud({ trail, focus, seed, onCrumb, scope, raining }: {
           {!WILD && (
             <div className="atlas-hud-stats">
               <Stat label="wealth" v={scope!.stats.wealth ?? 0.5} />
-              <Stat label="heat" v={scope!.stats.heat ?? 0.2} />
+              <Stat label="warmth" v={scope!.stats.warmth ?? 0.5} />
               <Stat label="density" v={scope!.stats.density ?? 0.5} />
             </div>
           )}
@@ -3826,9 +3839,9 @@ function speckle(base: RGB, x: number, y: number, amp: number): RGB {
 // land, and as the clear tint when the district is hovered. Not a fill.
 function districtHue(d: EntityDto): number {
   const ring0 = (d.stats.ring ?? 1) < 0.5;
-  const heat = d.stats.heat ?? 0.2;
+  const warmth = d.stats.warmth ?? 0.5;
   const ch = d.stats.character ?? ((d.id * 0.137) % 1);
-  return ring0 ? 44 + heat * 8 : (ch * 300 + heat * 20) % 360;
+  return ring0 ? 44 + warmth * 8 : (ch * 300 + warmth * 20) % 360;
 }
 // Wash a base terrain colour toward a district hue by `amount` (0 = pure terrain,
 // 1 = full identity). A whisper at rest, a clear lift on hover.
@@ -3961,8 +3974,8 @@ function descriptor(e: EntityDto, ring0: boolean): string {
   if (shore > 0.10) return 'a working waterfront';
   if (hill > 0.45) return 'windswept hill streets';
   if (ring0) return 'the dense, humming core';
-  const heat = e.stats.heat ?? 0.2, wealth = e.stats.wealth ?? 0.5, dens = e.stats.density ?? 0.5;
-  if (heat > 0.45) return 'a restless nightlife quarter';
+  const warmth = e.stats.warmth ?? 0.5, wealth = e.stats.wealth ?? 0.5, dens = e.stats.density ?? 0.5;
+  if (warmth > 0.6) return 'a restless nightlife quarter';
   if (wealth > 0.66) return 'leafy, well-to-do streets';
   if (dens < 0.4) return 'quiet outskirts';
   if (wealth < 0.4) return 'a hard-working district';
@@ -3983,6 +3996,18 @@ function hsl(h: number, s: number, l: number): RGB {
   else if (h < 300) [r, g, b] = [x, 0, c];
   else [r, g, b] = [c, 0, x];
   return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
+// design/creature.ts emits CSS `hsl(H,S%,L%)` strings; the terra bake writes raw
+// RGB bytes. This memoized parser bridges the two so drawSilhouette can stamp into
+// the ImageData buffer. Tiny cache — a critter uses only 2 colours (body + dark).
+const _hslCache = new Map<string, RGB>();
+function hslStrToRgb(s: string): RGB {
+  const hit = _hslCache.get(s);
+  if (hit) return hit;
+  const m = /hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)/.exec(s);
+  const rgb: RGB = m ? hsl(+m[1], +m[2], +m[3]) : [200, 120, 120];
+  _hslCache.set(s, rgb);
+  return rgb;
 }
 function clamp01(v: number): number { return v < 0 ? 0 : v > 1 ? 1 : v; }
 function lerp(a: number, b: number, t: number): number { return a + (b - a) * t; }

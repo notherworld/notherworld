@@ -36,6 +36,26 @@ export function setDists(d: Partial<Dists> | null): void { DISTS = { ...BASE_DIS
 // ranged deterministic draw: seed+salt → [lo,hi], fixed decimals
 const f = (seed: number, salt: number, lo: number, hi: number, dp = 1): string =>
   (lo + h(seed, salt) * (hi - lo)).toFixed(dp);
+const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
+// SCANNER FIDELITY — how truthful the player's life detector is. 1 = never lies;
+// below it, the orbital life readout FLIPS (false "signs detected" / false "likely
+// impossible") with probability (1 - fidelity), per address, deterministically.
+// This is EQUIPMENT quality, not a world law — the planet's ground truth never
+// changes; a better scanner just distorts less. Fixed base rate for now (~1.5%
+// lies); the future upgrade layer will thread a per-player fidelity into planetOf
+// and a scanner upgrade raises this number. Kept as one named dial for that swap.
+//
+// ⚠ LOAD-BEARING INVARIANT — the malfunction MUST stay a threshold on ONE fixed
+// roll: `h(seed, 918) > fidelity`. The lying set is { world : h(world,918) > fid },
+// so raising fidelity only RAISES THE BAR — it strictly SHRINKS the set, never
+// reshuffles it. This makes upgrades MONOTONIC: a misread world stays consistently
+// misread until your instrument clears its threshold, then snaps true and STAYS
+// true — the "come back with a better scanner and re-confirm" promise. NEVER change
+// this to re-roll per fidelity tier (e.g. h(seed, 918+tier) or reseeding): that
+// would MINT NEW LIES on upgrade — a world you'd verified could start lying again —
+// and break the re-check guarantee. When the upgrade layer lands, GUARD it:
+// lies(better) ⊆ lies(worse), plus the ~1.5% base rate in BOTH directions.
+const SCANNER_FIDELITY = 0.985;
 
 // how each universe's physics leans — later this biases the actual generators
 const BIAS = [
@@ -148,6 +168,15 @@ export function starOf(seed: number): StarLaw {
 export interface PlanetLaw {
   type: string; hue: number; sat: number; r: number; orbit: number; tempK: number;
   moons: number; rings: boolean; life: string; facts: string;
+  // ── THREE-QUANTITY LIFE MODEL (see planetOf). `life` + `type` are ORBIT-VISIBLE
+  // (key on detection, safe to render). hasLife/density are ENGINE-ONLY GROUND
+  // TRUTH — the surface reads them to spawn fauna. NEVER put them on a HUD: the
+  // camouflage depends on a sparse-life world being indistinguishable from a dead
+  // one from orbit, to the player AND to us.
+  hasLife: boolean;               // is there ANY life to find on the surface
+  density: number;                // 0..1 HOW MUCH — scales the fauna count; below the
+                                  // detection threshold it hides from the orbital scan
+  lifeRich: boolean;              // verdant (dense) vs microbial — magnitude-driven
   sizeKm: number; grid: number;   // SIZE IS THE LAW: surface = grid×grid regions —
                                   // a big planet is literally more world to explore
   cloudy: boolean;                // heavy atmosphere (charter-tiltable)
@@ -157,17 +186,104 @@ export function planetOf(seed: number, index: number, star: StarLaw): PlanetLaw 
   const tempK = Math.round(star.tempK * 0.048 / Math.sqrt(orbit));    // Earth ≈ 277 K sanity
   const gas = index >= 2 && h(seed, 902) > 0.62;
   const habitable = tempK > 235 && tempK < 330;
-  // life: the BASE universe gates it on physics (habitable band + the star's
-  // roll); a charter's lifeChance overrides the gate outright — a universe whose
-  // constants favor life simply HAS it, even on worlds ours would call hostile.
-  const life = DISTS.lifeChance !== undefined
-    ? (!gas && h(seed, 905) < DISTS.lifeChance ? (h(seed, 907) < 0.35 ? 'verdant' : 'microbial') : 'none')
-    : (!gas && habitable && star.life !== 'none detected' && star.life !== 'no worlds'
-      ? (star.life === 'verdant worlds' && h(seed, 905) > 0.4 ? 'verdant' : 'microbial') : 'none');
+  // ── GRADED LIFE SIGNS — the planet-scale readout is a DETECTOR, not a verdict.
+  // A habitability SCORE (0..1) from temperature comfort × the star's own life
+  // odds bands the readout into five signals; the ACTUAL presence of life is then
+  // rolled with a probability tied to that band — high where detected, but NEVER
+  // zero: even a "likely impossible" world hides an extremophile ~3% of the time
+  // (the 500°C survivor), and a "signs detected" world is occasionally a false
+  // positive. Decoupling the signal from the truth is what makes exploring worth
+  // it — you only KNOW by landing. Odds are bumped up over the old tight gate so
+  // the sky isn't mostly dead rock. A charter's lifeChance still tilts the whole
+  // curve (a life-friendly universe reads greener everywhere).
+  const starBonus = star.life === 'verdant worlds' ? 0.35 : star.life === 'microbial seas' ? 0.18 : 0;
+  // temperature comfort: 1 at the ~285 K sweet spot, tapering to 0 by the extremes.
+  // The 290 K span is WIDE on purpose — real star fields skew cold (most stars are
+  // M-dwarfs), so a narrow comfort band buried ~⅓ of worlds in "impossible" and the
+  // sky read mostly dead. A wider span + a higher floor (0.20) puts most cold-ish
+  // worlds in "unlikely" (life still clings) rather than hopeless, landing ~76% of
+  // rocky worlds alive without cheapening the genuine hellscapes.
+  const tComfort = clamp01(1 - Math.abs(tempK - 285) / 290);
+  const charterTilt = DISTS.lifeChance !== undefined ? (DISTS.lifeChance - 0.15) : 0;  // 0 at baseline
+  const score = gas ? 0 : clamp01(0.20 + 0.7 * tComfort + starBonus + charterTilt + (h(seed, 905) - 0.5) * 0.35);
+  // ── THREE-QUANTITY LIFE MODEL — latent state vs observable state, done right.
+  // (1) CONDITIONS: the player-visible band (favorable→impossible), from habitability
+  //     ALONE — never from ground truth. This is all the orbital scan honestly knows.
+  // (2) hasLife: ENGINE-ONLY ground truth. Every band can bear life (extremophiles);
+  //     odds are bumped so ~3/4 of rocky worlds are alive.
+  // (3) density: ENGINE-ONLY magnitude (0..1) — HOW MUCH life. Favorable worlds skew
+  //     dense; an impossible-band survivor is BY DEFINITION sparse (a 500°C creature
+  //     is never a teeming world). Density is the axis that turns the binary into a
+  //     spectrum, and it drives the fauna count on the surface.
+  // THE CAMOUFLAGE (the whole system): the scan reads "signs detected" ONLY when
+  // hasLife AND density clears a detection threshold. Below it, the world reads by
+  // its CONDITIONS band alone — so a sparse-life world and a truly-empty world are
+  // INDISTINGUISHABLE from orbit, by construction. The overlap zone is genuinely
+  // uninformative — to the player AND to us. hasLife/density never touch a HUD.
+  const conditions = gas ? 'impossible'
+    : score > 0.62 ? 'favorable'
+    : score > 0.45 ? 'possible'
+    : score > 0.14 ? 'unlikely'
+    : 'impossible';
+  // PRESENCE ODDS PER BAND — decoupled from conditions in BOTH directions, so no
+  // reading is ever a certainty. A "favorable" world is empty ~18% of the time (the
+  // dead teaser: great conditions, nothing took hold — landing is a real bet, not a
+  // formality), and an "unlikely" world clings to life ~35% of the time (the hidden
+  // clinger). The spread still GUIDES (favorable ~8× the odds of unlikely, so you
+  // can prioritize and skip efficiently) — it just never GUARANTEES. That symmetry
+  // is the point: the scan saves you time statistically without ever letting you —
+  // or us — write a world off as dead from orbit.
+  const presenceP: Record<string, number> = { favorable: 0.82, possible: 0.62, unlikely: 0.35, impossible: 0.1 };
+  const hasLife = !gas && h(seed, 906) < presenceP[conditions];
+  // magnitude: centred per band with a WIDE spread, positioned so the detection
+  // threshold (0.45) cuts THROUGH the has-life distribution in every band — that's
+  // what makes the camouflage real: favorable life is usually (not always) dense
+  // enough to detect, possible life is a coin-flip, unlikely life mostly hides, and
+  // the impossible-band extremophile is ALWAYS below threshold (a 500°C survivor is
+  // never a teeming world — capped hard). So a "none detected" of ANY band can be
+  // secretly alive, and you only learn which by landing.
+  const densCentre: Record<string, number> = { favorable: 0.62, possible: 0.44, unlikely: 0.30, impossible: 0.15 };
+  const densCap: Record<string, number> = { favorable: 1, possible: 0.85, unlikely: 0.62, impossible: 0.42 };
+  const density = hasLife
+    ? Math.min(densCap[conditions], clamp01(densCentre[conditions] + (h(seed, 907) - 0.5) * 0.55))
+    : 0;
+  const DETECT = 0.45;                          // orbital detection threshold
+  const lifeRich = hasLife && density > 0.6;    // verdant vs microbial, magnitude-driven
+  const detected = hasLife && density > DETECT; // GROUND-TRUTH detectability (honest)
+  // ── SCANNER MALFUNCTION — the instrument itself lies, rarely, with confidence.
+  // Everything above is the honest camouflage (incomplete but never false). This is
+  // categorically different: it corrupts the ONE reliable signal. `reported` is what
+  // the scanner CLAIMS — normally `detected`, but with prob (1 - SCANNER_FIDELITY)
+  // it FLIPS: a confident "signs detected" over a dead world, or a flat "likely
+  // impossible" over a teeming one. Own salt (918) → deterministic per address, so
+  // the same world lies the same way until you re-scan with a better instrument.
+  // FIDELITY IS EQUIPMENT, NOT WORLD: the world's truth (hasLife/density) is fixed
+  // forever; fidelity is the player's scanner quality. Today it's a fixed base rate;
+  // when the upgrade layer lands, planetOf takes a fidelity arg and a better scanner
+  // simply passes a higher number — fewer lies, same worlds. One-line swap, no rework.
+  const malfunction = h(seed, 918) > SCANNER_FIDELITY;
+  const reported = malfunction ? !detected : detected;
+  // the readout STRING (player-facing) reflects what the scanner REPORTS. "signs
+  // detected" only when reported; else the CONDITIONS band verbatim. Honest readings
+  // are incomplete but never false; the rare malfunction is the exception that makes
+  // even a confirmed detection less than certain. A dense living world and a sparse
+  // hidden one look nothing alike; a sparse living world and a dead favorable one
+  // look IDENTICAL; and once in a while the scanner is just plain wrong.
+  const life = reported ? 'signs detected'
+    : conditions === 'favorable' ? 'none detected · favorable'
+    : conditions === 'possible' ? 'none detected · possible'
+    : conditions === 'unlikely' ? 'none detected · unlikely'
+    : 'likely impossible';
   const cloudy = !gas && h(seed, 909) < DISTS.cloudyChance;
+  // TYPE (drives the label AND the color drawn) is ORBIT-VISIBLE, so it keys on
+  // `reported` — what the scanner CLAIMS — never `hasLife` or even `detected`. This
+  // keeps the label and the color consistent with the readout the player sees: a
+  // malfunctioning false-positive world reads "living" AND renders green (the lie is
+  // seamless, discovered only on landing), and a false-negative living world hides
+  // as a plain rock. Any divergence here would leak the truth from orbit.
   const type = gas ? (tempK > 150 ? 'gas giant' : 'ice giant')
     : tempK > 600 ? 'lava world' : tempK > 330 ? 'desert world'
-    : habitable ? (life !== 'none' ? 'living world' : 'rocky world')
+    : habitable ? (reported ? 'living world' : 'rocky world')
     : tempK > 150 ? 'tundra world' : 'ice world';
   const LOOK: Record<string, [number, number]> = {                    // hue, sat — type IS the color
     'lava world': [12, 0.85], 'desert world': [35, 0.6], 'rocky world': [28, 0.3],
@@ -177,7 +293,7 @@ export function planetOf(seed: number, index: number, star: StarLaw): PlanetLaw 
   const [hue, sat] = LOOK[type];
   const r = gas ? 3.6 + 2.2 * h(seed, 903) : 1.5 + 1.3 * h(seed, 903);
   const moons = gas ? 2 + Math.floor(h(seed, 904) * 8) : Math.floor(h(seed, 904) * 3);
-  const rings = gas && h(seed, 906) > 0.5;
+  const rings = gas && h(seed, 913) > 0.5;   // salt 913: 906 now rolls hasLife
   // surface extent from the body itself — no fixed "every planet = N minecrafts":
   // radius rolls, and the surface tile-grid follows. Gas giants have no surface.
   const sizeKm = Math.round(gas ? 18000 + h(seed, 908) * 100000 : 1800 + h(seed, 908) * 11000);
@@ -188,7 +304,7 @@ export function planetOf(seed: number, index: number, star: StarLaw): PlanetLaw 
     gas ? `no surface — ${sizeKm.toLocaleString('en-US')} km of storm` : `surface ${grid}×${grid} regions · ${sizeKm.toLocaleString('en-US')} km`,
     `life: ${life}`,
   ].map((l) => `  ${l}`).join('\n');
-  return { type, hue, sat, r, orbit, tempK, moons, rings, life, facts, sizeKm, grid, cloudy };
+  return { type, hue, sat, r, orbit, tempK, moons, rings, life, hasLife, density, lifeRich, facts, sizeKm, grid, cloudy };
 }
 
 // BLACK HOLE — the wormhole network. Every hole's EXIT is part of its address:

@@ -233,7 +233,7 @@ interface Roid {
 interface Belt { r: number; rocks: Roid[] }
 interface Planet {
   addr: number; idx: number; uaddr: number; scaddr: number; gaddr: number; saddr: number; sname: string;
-  name: string; facts: string; type: string; life: string;
+  name: string; facts: string; type: string; life: string; hasLife: boolean; density: number;
   orbit: number; phase: number; speed: number; r: number; hue: number; sat: number;
   moons: number; rings: boolean; moonsD: Moon[];
 }
@@ -258,7 +258,7 @@ function planetsFor(s: Star): Planet[] {
     });
     return {
       addr, idx: i, uaddr: s.uaddr, scaddr: s.scaddr, gaddr: s.gaddr, saddr: s.addr, sname: s.name,
-      name: properName(pseed, 12), facts: law.facts, type: law.type, life: law.life,
+      name: properName(pseed, 12), facts: law.facts, type: law.type, life: law.life, hasLife: law.hasLife, density: law.density,
       orbit: 58 + i * 46 + 18 * rnd(pseed, 921),     // strictly widening rings
       phase: 6.283 * rnd(pseed, 922), speed: 0.55 / Math.pow(i + 1, 1.4),
       r: law.r * 2.2, hue: law.hue, sat: law.sat, moons: law.moons, rings: law.rings, moonsD,
@@ -1645,7 +1645,7 @@ export default function Nother() {
         : p.type === 'living world' || p.type === 'ocean world' ? 'verdant'
         : p.type === 'ice world' || p.type === 'tundra world' ? 'ice'
         : p.type.includes('giant') ? null : 'barren';
-      setExplorable(nk ? { label: p.name, url: `terra.html#x=${nk}~${p.uaddr}~${p.gaddr}~${p.saddr}~${p.addr}~${p.life !== 'none' ? 1 : 0}~${encodeURIComponent(p.name)}` } : null);
+      setExplorable(nk ? { label: p.name, url: `terra.html#x=${nk}~${p.uaddr}~${p.gaddr}~${p.saddr}~${p.addr}~${p.hasLife ? 1 : 0}~${encodeURIComponent(p.name)}${p.hasLife ? `~d${Math.round(p.density * 100)}` : ''}` } : null);
       setInfo(`${p.name} · world of ${p.sname} · tracking\n${p.facts}\n${nk ? '  ⤓ explore lands on its surface — an entire Atlas' : '  no surface to land on'}\n  ⌖ ${p.uaddr} / ${p.scaddr} / ${p.gaddr} / ${p.saddr} / ${p.addr}`);
       return;
     }

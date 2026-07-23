@@ -199,6 +199,51 @@ fn terra_fauna_ecosystem_lives() {
         }
     }
 
+    // ── ONE SOUL AT EVERY LOD — terra's fauna carry the SAME body-plan genome
+    // /bestiary.html draws (design/creature.ts::drawSilhouette/drawCreature read
+    // exactly these), descended from PLANET LAWS flowed city→district. This proves
+    // the in-world critter and its codex portrait are one genome, not two skins.
+    let all: Vec<usize> = w
+        .children(city)
+        .into_iter()
+        .filter(|&d| w.kind(d) == "district")
+        .flat_map(|d| w.children(d).into_iter().filter(|&c| w.kind(c) == "fauna").collect::<Vec<_>>())
+        .collect();
+    // (1) laws descended intact to the districts the fauna read from
+    let laws_ok = w
+        .children(city)
+        .into_iter()
+        .filter(|&d| w.kind(d) == "district")
+        .all(|d| w.stat(d, "air") > 0.0 && w.stat(d, "gravity") > 0.0 && w.stat(d, "lush") > 0.0);
+    assert!(laws_ok, "planet laws must flow city→district for fauna to descend from");
+    // (2) the FULL compositor genome is present and VARIED — no thin skins left.
+    // (stat() returns 0.0 for a missing key, so we prove presence by the spread a
+    // real genome produces: absent stats would read a flat 0 across the island.)
+    let distinct = |key: &str| -> std::collections::BTreeSet<i64> {
+        all.iter().map(|&f| w.stat(f, key).round() as i64).collect()
+    };
+    assert!(distinct("torso").len() >= 2, "torso genome must vary across species");
+    assert!(distinct("head").len() >= 2, "head genome must vary across species");
+    assert!(distinct("pattern").len() >= 2, "pattern genome must vary across species");
+    for &f in &all {
+        assert!(w.stat(f, "torso") >= 0.0 && w.stat(f, "torso") < 5.0, "torso index in TORSOS range");
+        assert!(w.stat(f, "head") >= 0.0 && w.stat(f, "head") < 5.0, "head index in HEADS range");
+        assert!(w.stat(f, "pattern") >= 0.0 && w.stat(f, "pattern") < 3.0, "pattern index in PATTERNS range");
+        assert!(w.stat(f, "height") > 0.0 && w.stat(f, "leglen") > 0.0, "stature genome present");
+        assert!(w.stat(f, "hue2") > 0.0, "secondary hue present for the portrait accent");
+    }
+    // (3) the laws actually SHAPE the population (statistical, like the bestiary
+    // guard): terra's moderate air breeds some — but not all — flyers, and the
+    // heat law spreads fur across species rather than pinning it flat.
+    let n = all.len() as f32;
+    let flyers = all.iter().filter(|&&f| w.stat(f, "flyer") > 0.5).count();
+    assert!(flyers > 0, "moderate air should breed at least some flyers");
+    assert!((flyers as f32) < n, "moderate air should NOT make everything a flyer");
+    let furs: Vec<f32> = all.iter().map(|&f| w.stat(f, "fur")).collect();
+    let fmin = furs.iter().cloned().fold(f32::INFINITY, f32::min);
+    let fmax = furs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    assert!(fmax - fmin > 0.2, "the heat law should spread fur across species, got range {fmin:.2}..{fmax:.2}");
+
     // run a season: the ecosystem persists (no collapse, no runaway)
     for _ in 0..400 {
         w.step();

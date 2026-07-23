@@ -265,6 +265,15 @@ export interface BodyLaws {
   dark: number;    // within-type character: dark rocks ↔ pale / crystal-flecked
   warm: number;    // within-type hue tilt: −1 cool blue-grey … +1 warm rust —
                    // two FULL-purity asteroids still look nothing alike
+  // ── FAUNA LAWS (bestiary vocabulary, worlds/bestiary.json) — the body plan of
+  // this address's life descends from these. Names + directions match bestiary
+  // EXACTLY so one address = one planet across every page. Type-shaped ranges:
+  // an ice world is cold (→ fur), a verdant world lush (→ big herds), a thin
+  // barren rock breeds flyers. Rolled from the seed → deterministic per address.
+  air: number;     // atmosphere thickness — thin (low) breeds flyers
+  gravity: number; // caps size, low-slungs the striders
+  heat: number;    // PLANET BASELINE temperature — cold (low) grows fur everywhere
+  lush: number;    // biomass — sets herd size
 }
 export function bodyLaws(seed: number, nk: string): BodyLaws {
   const r = (k: number) => rndT(seed, k);
@@ -278,17 +287,29 @@ export function bodyLaws(seed: number, nk: string): BodyLaws {
     : 0.78 + r(62) * 0.14;
   const relief = 0.5 + r(63) * 1.1;                      // elevation diversity
   const freq = 5 + r(64) * 9;                            // roughness frequency
+  // FAUNA LAWS — type-shaped centre + a per-address roll, so an ice world is
+  // reliably cold (yet no two ice worlds identical) and a verdant world reliably
+  // lush. Each is centre ± spread, clamped to the bestiary's 0..1 law range.
+  const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
+  const heatCentre = nk === 'lava' ? 0.9 : nk === 'ice' ? 0.12 : nk === 'verdant' ? 0.55 : 0.5;
+  const lushCentre = nk === 'verdant' ? 0.85 : nk === 'ice' ? 0.25 : nk === 'lava' ? 0.15 : 0.4;
+  const airCentre  = nk === 'verdant' ? 0.7 : nk === 'barren' ? 0.4 : 0.55; // barren = thinner → more flyers
+  const heat    = clamp01(heatCentre + (r(70) - 0.5) * 0.3);
+  const lush    = clamp01(lushCentre + (r(71) - 0.5) * 0.3);
+  const air     = clamp01(airCentre + (r(72) - 0.5) * 0.5);   // wide spread — aviary vs grounded is the variance
+  const gravity = clamp01(0.2 + r(73) * 0.7);                 // 0.2–0.9, uncorrelated to type
   return {
     seaLevel, iceLine, relief, freq, liquid: nk === 'lava' ? 'lava' : 'water',
     blend: 0.55 + r(65) * 0.45,                          // 55–100% its type
     dark: r(67), warm: (r(68) - 0.5) * 2,
+    air, gravity, heat, lush,
   };
 }
 // compose the body's OWN spec: its laws rewrite the field chain (elevation
 // amplitude/centre from relief, water from ITS sea level, snow from ITS ice
 // line) and `settled` comes from the body's LIFE fact — an unexplored icy moon
 // gets NO districts, NO roads, NO bridges, because nobody is there to build them.
-export function composeSpecFor(t: SurfaceTemplate, seed: number, laws: BodyLaws, settled: boolean): object {
+export function composeSpecFor(t: SurfaceTemplate, seed: number, laws: BodyLaws, settled: boolean, density = 1): object {
   const A = (0.62 * laws.relief).toFixed(3);
   const B = (0.65 - 0.31 * laws.relief).toFixed(3);      // keep the mean; scale the spread
   const D = (0.16 * laws.relief).toFixed(3);
@@ -304,7 +325,23 @@ export function composeSpecFor(t: SurfaceTemplate, seed: number, laws: BodyLaws,
       snow: `and(field(land,fx,fy), gt(field(elevation,fx,fy), ${laws.iceLine.toFixed(2)}))`,
     },
   };
-  const spec = composeSpec(t2, seed) as SpecShape & { rng_seed: number; templates?: unknown };
+  const spec = composeSpec(t2, seed) as SpecShape & { rng_seed: number; templates?: unknown;
+    seed?: { kind?: string; stats?: Record<string, number> }[] };
+
+  // ── FAUNA LAWS PER ADDRESS — overwrite the base world's fallback constants on
+  // the seeded city with THIS body's rolled laws (bodyLaws), so the fauna genome
+  // (which reads parent.air/heat/gravity/lush) describes THIS planet. Same names
+  // as worlds/bestiary.json → one address is one planet across every page. If the
+  // base spec's top seed isn't the city, this is a no-op (safe).
+  if (Array.isArray(spec.seed) && spec.seed.length) {
+    const top = spec.seed.find((s) => s.kind === 'city') ?? spec.seed[0];
+    // life_density (engine-only MAGNITUDE from the orbital fact sheet) scales the
+    // fauna count on the surface: a sparse hidden-life world spawns a handful of
+    // critters across many districts (finding one is the game), a teeming world
+    // swarms. Base Veranholm keeps 1 (its own fallback). 0 → no fauna at all.
+    top.stats = { ...(top.stats ?? {}), air: laws.air, gravity: laws.gravity, heat: laws.heat, lush: laws.lush, life_density: density };
+  }
+
   if (!settled) {
     // NATURAL REGIONS — an uninhabited world still CARVES (you can dive region →
     // expanse at the same depth as any districted world), but the carve is keyed
