@@ -1,0 +1,413 @@
+{
+  "_note": "THE GLADE — a complete hunting game as pure data, soul-first. Every animal is an individual: THIS deer hears better than its brother (hearing), THAT one grazes bolder (boldness). The hunter's noise rolls up to a glade-wide alarm, wind carries it back down scaled by EACH deer's own ears, fear drives flight, a gunshot spooks the whole herd for many ticks. Win: 3 clean kills before dusk (t180). Lose: dusk, empty-handed. Zero host logic — the shell only draws.",
+  "rng_seed": 47,
+  "seed": [
+    {
+      "kind": "glade",
+      "name": "Blackfern Glade",
+      "reveal": true,
+      "stats": {
+        "wind": 0.3,
+        "alarm": 0.0,
+        "grass": 0.9,
+        "day": 0,
+        "herd": 8,
+        "won": 0,
+        "over": 0
+      }
+    }
+  ],
+  "generators": [
+    {
+      "on": "glade",
+      "spawn": "deer",
+      "count": "8",
+      "child_stats": {
+        "hearing": "0.2 + 0.7*rand(1)",
+        "boldness": "0.2 + 0.6*rand(2)",
+        "fear": "0.15 + 0.1*rand(3)",
+        "hunger": "0.3 + 0.3*rand(4)",
+        "energy": "0.7 + 0.3*rand(5)",
+        "distance": "0.45 + 0.45*rand(6)",
+        "took": "0",
+        "wounded": "0",
+        "down": "0",
+        "bolted": "0",
+        "marked": "0"
+      }
+    },
+    {
+      "on": "glade",
+      "spawn": "hunter",
+      "count": "1",
+      "child_stats": {
+        "stealth": "0.3",
+        "patience": "0.4",
+        "noise": "0.1",
+        "shots": "0",
+        "learned": "0"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "on": "glade",
+      "set": "day",
+      "expr": "day + 1"
+    },
+    {
+      "on": "glade",
+      "set": "wind",
+      "expr": "clamp(wind + 0.1*chance(0.5) - 0.1*chance(0.5), 0.05, 1)"
+    },
+    {
+      "on": "glade",
+      "set": "alarm",
+      "expr": "clamp(alarm*0.82 + 0.55*noise_up*(0.4 + 0.6*wind), 0, 1)"
+    },
+    {
+      "on": "glade",
+      "set": "grass",
+      "expr": "clamp(grass + 0.03*(1 - grass) - 0.06*graze_draw, 0.05, 1)"
+    },
+    {
+      "on": "glade",
+      "set": "herd",
+      "expr": "child_count() - 1"
+    },
+    {
+      "on": "deer",
+      "set": "fear",
+      "expr": "clamp(fear*0.88 + 0.9*alarm_s*hearing*(0.4 + 0.6*wind_s), 0, 1)"
+    },
+    {
+      "on": "deer",
+      "set": "hunger",
+      "expr": "clamp(hunger + 0.02, 0, 1)"
+    },
+    {
+      "on": "deer",
+      "set": "distance",
+      "expr": "clamp(distance, 0.05, 1)"
+    },
+    {
+      "on": "hunter",
+      "set": "noise",
+      "expr": "clamp(noise*0.65, 0, 1)"
+    },
+    {
+      "on": "deer",
+      "set": "marked",
+      "expr": "clamp(marked*0.6, 0, 1)"
+    }
+  ],
+  "rollups": [
+    {
+      "parent": "glade",
+      "child_stat": "noise",
+      "parent_stat": "noise_up",
+      "reduce": "max"
+    },
+    {
+      "parent": "glade",
+      "child_stat": "took",
+      "parent_stat": "graze_draw",
+      "reduce": "sum",
+      "drain": true
+    },
+    {
+      "parent": "glade",
+      "child_stat": "marked",
+      "parent_stat": "marked_up",
+      "reduce": "max"
+    }
+  ],
+  "broadcasts": [
+    {
+      "parent_stat": "alarm",
+      "child_stat": "alarm_s",
+      "gain": 1.0
+    },
+    {
+      "parent_stat": "wind",
+      "child_stat": "wind_s",
+      "gain": 1.0
+    },
+    {
+      "parent_stat": "grass",
+      "child_stat": "grass_s",
+      "gain": 1.0
+    },
+    {
+      "parent_stat": "over",
+      "child_stat": "over_s",
+      "gain": 1.0
+    },
+    {
+      "parent_stat": "marked_up",
+      "child_stat": "marked_s",
+      "gain": 1.0
+    }
+  ],
+  "actions": [
+    {
+      "on": "deer",
+      "name": "graze",
+      "score": "gt(hunger,0.3)*(0.4 + 0.5*grass_s)*(1 - fear)",
+      "effects": [
+        {
+          "op": "add",
+          "stat": "hunger",
+          "expr": "-0.12"
+        },
+        {
+          "op": "set",
+          "stat": "took",
+          "expr": "0.1"
+        },
+        {
+          "op": "add",
+          "stat": "distance",
+          "expr": "-0.04*boldness"
+        },
+        {
+          "op": "add",
+          "stat": "energy",
+          "expr": "0.02"
+        }
+      ]
+    },
+    {
+      "on": "deer",
+      "name": "flee",
+      "score": "gt(fear,0.6)*gt(energy,0.1)*1.6",
+      "effects": [
+        {
+          "op": "add",
+          "stat": "distance",
+          "expr": "0.18"
+        },
+        {
+          "op": "add",
+          "stat": "energy",
+          "expr": "-0.1"
+        },
+        {
+          "op": "add",
+          "stat": "fear",
+          "expr": "-0.14"
+        }
+      ]
+    },
+    {
+      "on": "deer",
+      "name": "rest",
+      "score": "lt(energy,0.35)*0.9",
+      "effects": [
+        {
+          "op": "add",
+          "stat": "energy",
+          "expr": "0.12"
+        }
+      ]
+    },
+    {
+      "on": "deer",
+      "name": "drift",
+      "score": "0.25 + 0.15*chance(0.5)",
+      "effects": [
+        {
+          "op": "add",
+          "stat": "distance",
+          "expr": "0.12*chance(0.5) - 0.06"
+        }
+      ]
+    },
+    {
+      "on": "deer",
+      "name": "drop",
+      "score": "gt(wounded,0.5)*10",
+      "effects": [
+        {
+          "op": "despawn"
+        }
+      ]
+    },
+    {
+      "on": "hunter",
+      "name": "mark_quarry",
+      "score": "lt(edge_count(quarry),1)*lt(over_s,0.5)*3",
+      "effects": [
+        {
+          "op": "link",
+          "stat": "quarry:deer"
+        }
+      ]
+    },
+    {
+      "on": "hunter",
+      "name": "retarget",
+      "score": "gt(marked_s,0.5)*lt(over_s,0.5)*6",
+      "effects": [
+        {
+          "op": "unlink",
+          "stat": "quarry"
+        },
+        {
+          "op": "link",
+          "stat": "quarry:deer@max:target.marked"
+        }
+      ]
+    },
+    {
+      "on": "hunter",
+      "name": "wait_still",
+      "score": "gt(alarm_s,0.3)*1.4 + 0.12",
+      "effects": [
+        {
+          "op": "add",
+          "stat": "patience",
+          "expr": "0.05"
+        },
+        {
+          "op": "set",
+          "stat": "noise",
+          "expr": "0.02"
+        }
+      ]
+    },
+    {
+      "on": "hunter",
+      "name": "creep",
+      "score": "gt(edge_count(quarry),0)*lt(alarm_s,0.3)*lt(over_s,0.5)*(0.5 + 0.5*patience)",
+      "effects": [
+        {
+          "op": "affect",
+          "stat": "quarry:distance",
+          "expr": "-0.055*(0.5 + stealth)"
+        },
+        {
+          "op": "add",
+          "stat": "noise",
+          "expr": "0.08*(1 - stealth)"
+        },
+        {
+          "op": "add",
+          "stat": "stealth",
+          "expr": "0.004*(1 - stealth)"
+        },
+        {
+          "op": "add",
+          "stat": "patience",
+          "expr": "0.025"
+        }
+      ]
+    },
+    {
+      "on": "hunter",
+      "name": "shoot",
+      "score": "gt(edge_count(quarry),0)*gt(patience,0.5)*lt(alarm_s,0.28)*lt(over_s,0.5)*chance(0.5)*1.3",
+      "effects": [
+        {
+          "op": "affect",
+          "stat": "quarry:wounded",
+          "expr": "chance(0.35 + 0.4*stealth)*gt(0.24, target.distance)"
+        },
+        {
+          "op": "add",
+          "stat": "shots",
+          "expr": "1"
+        },
+        {
+          "op": "add",
+          "stat": "noise",
+          "expr": "0.9"
+        },
+        {
+          "op": "add",
+          "stat": "patience",
+          "expr": "-0.45"
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "on": "deer",
+      "when": "gt(wounded,0.5)*lt(down,0.5)",
+      "label": "a clean shot — a deer drops in the fern",
+      "do": [
+        {
+          "op": "set",
+          "stat": "down",
+          "expr": "1"
+        }
+      ]
+    },
+    {
+      "on": "deer",
+      "when": "gt(fear,0.75)*lt(bolted,0.5)",
+      "label": "a deer bolts — white tail flashing through the trees",
+      "do": [
+        {
+          "op": "set",
+          "stat": "bolted",
+          "expr": "1"
+        }
+      ]
+    },
+    {
+      "on": "hunter",
+      "when": "gt(stealth,0.5)*lt(learned,0.5)",
+      "label": "the hunter learns the woods — footfalls go quiet",
+      "do": [
+        {
+          "op": "set",
+          "stat": "learned",
+          "expr": "1"
+        }
+      ]
+    },
+    {
+      "on": "glade",
+      "when": "lt(herd,7.5)*lt(blood,0.5)",
+      "label": "first blood in Blackfern Glade",
+      "do": [
+        {
+          "op": "set",
+          "stat": "blood",
+          "expr": "1"
+        }
+      ]
+    },
+    {
+      "on": "glade",
+      "when": "lt(herd,5.5)*lt(won,0.5)",
+      "label": "★ THREE KILLS BEFORE DUSK — the freezer is full, the hunt is won",
+      "do": [
+        {
+          "op": "set",
+          "stat": "won",
+          "expr": "1"
+        },
+        {
+          "op": "set",
+          "stat": "over",
+          "expr": "1"
+        }
+      ]
+    },
+    {
+      "on": "glade",
+      "when": "gt(day,179.5)*lt(won,0.5)*lt(over,0.5)",
+      "label": "dusk falls — the hunter goes home empty-handed",
+      "do": [
+        {
+          "op": "set",
+          "stat": "over",
+          "expr": "1"
+        }
+      ]
+    }
+  ]
+}

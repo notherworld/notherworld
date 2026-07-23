@@ -1,0 +1,50 @@
+/* THE GLADE — shell chrome. Dark HUD over the three.js meadow. */
+* { box-sizing: border-box; margin: 0; }
+html, body, #hunt, #fish { height: 100%; }
+body { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; background: #10141a; color: #dfe7ee; overflow: hidden; }
+
+.hunt { position: relative; height: 100%; }
+.hunt-canvas { position: absolute; inset: 0; }
+.hunt-canvas canvas { display: block; }
+
+.hunt-err { position: absolute; top: 40%; left: 50%; transform: translateX(-50%); background: #4a1520; padding: 12px 18px; border-radius: 6px; z-index: 9; }
+
+.hunt-top { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: linear-gradient(#10141ad0, transparent); z-index: 5; }
+.hunt-title { font-weight: 700; letter-spacing: 0.08em; }
+.hunt-title span { font-weight: 400; font-size: 11px; opacity: 0.65; letter-spacing: 0; }
+.hunt-clock { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.hunt-daybar { width: 160px; height: 6px; background: #ffffff22; border-radius: 3px; overflow: hidden; }
+.hunt-daybar i { display: block; height: 100%; background: linear-gradient(90deg, #f0c869, #7a5fa8); }
+
+.hunt-side { position: absolute; top: 54px; right: 10px; width: 250px; background: #10141ac8; border: 1px solid #ffffff18; border-radius: 8px; padding: 10px; z-index: 5; font-size: 12px; }
+.hunt-stat { display: flex; justify-content: space-between; padding: 2px 0; }
+.hunt-stat b { opacity: 0.7; font-weight: 600; }
+.hunt-meter { display: grid; grid-template-columns: 64px 1fr; gap: 6px; align-items: center; padding: 3px 0; }
+.hunt-meter b { opacity: 0.7; font-weight: 600; }
+.hunt-meter div { height: 6px; background: #ffffff18; border-radius: 3px; overflow: hidden; }
+.hunt-meter i { display: block; height: 100%; background: #6fae7c; transition: width 0.2s; }
+.hunt-meter.hot i { background: #d86a5a; }
+
+.hunt-deerlist { margin-top: 8px; border-top: 1px solid #ffffff14; padding-top: 6px; max-height: 220px; overflow-y: auto; }
+.hunt-deer { display: flex; gap: 7px; align-items: baseline; padding: 1px 0; font-size: 11px; }
+.hunt-deer .nm { width: 52px; opacity: 0.8; }
+.hunt-deer .afraid { color: #ff9c8a; }
+.hunt-deer em { margin-left: auto; opacity: 0.5; font-style: normal; }
+
+.hunt-foot { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; padding: 12px 14px; background: linear-gradient(transparent, #10141ad8); z-index: 5; }
+.hunt-stances { display: flex; gap: 6px; }
+.hunt-stances button { font: inherit; font-size: 12px; padding: 7px 13px; background: #ffffff14; color: #dfe7ee; border: 1px solid #ffffff22; border-radius: 6px; cursor: pointer; }
+.hunt-stances button:hover { background: #ffffff24; }
+.hunt-stances button.on { background: #6fae7c33; border-color: #6fae7c; }
+.hunt-stances button.shoot { background: #d86a5a2e; border-color: #d86a5a; font-weight: 700; }
+.hunt-stances button:disabled { opacity: 0.4; cursor: default; }
+
+.hunt-chron { font-size: 11px; opacity: 0.85; text-align: right; max-width: 520px; }
+.hunt-chron em { opacity: 0.5; font-style: normal; margin-right: 5px; }
+
+.hunt-banner { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: #10141ab8; z-index: 8; }
+.hunt-banner h1 { letter-spacing: 0.12em; }
+.hunt-banner.won h1 { color: #f0c869; }
+.hunt-banner.lost h1 { color: #a8b4c0; }
+.hunt-banner button { font: inherit; padding: 10px 18px; background: #6fae7c33; color: #dfe7ee; border: 1px solid #6fae7c; border-radius: 6px; cursor: pointer; }
+.hunt-hint { align-self: center; font-size: 11px; opacity: 0.55; margin-left: 8px; }

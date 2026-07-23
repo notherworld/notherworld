@@ -1,0 +1,368 @@
+{
+  "_note": "GREYWATER SHORE — a fishing game composed from FIVE REUSED hunt packs + ONE new one (lure). Same clock, same wind/alarm perception commons (a cast's splash spooks fish the way a gunshot spooks deer), same individual variation (affinity = 'this fish likes the lure more'), same fear/flight, same grazing (plankton). Only the lure pack is new. This file is the marketplace thesis in miniature.",
+  "rng_seed": 47,
+  "seed": [
+    {
+      "kind": "shore",
+      "name": "Greywater Shore",
+      "reveal": true,
+      "stats": {
+        "wind": 0.3,
+        "alarm": 0,
+        "grass": 0.9,
+        "day": 0,
+        "school": 8,
+        "won": 0,
+        "over": 0
+      }
+    }
+  ],
+  "generators": [
+    {
+      "on": "shore",
+      "spawn": "fish",
+      "count": "8",
+      "child_stats": {
+        "hearing": "0.2 + 0.7*rand(1)",
+        "boldness": "0.2 + 0.6*rand(2)",
+        "affinity": "0.2 + 0.7*rand(7)",
+        "fear": "0.15 + 0.1*rand(3)",
+        "hunger": "0.3 + 0.3*rand(4)",
+        "energy": "0.7 + 0.3*rand(5)",
+        "distance": "0.45 + 0.45*rand(6)",
+        "took": "0",
+        "wounded": "0",
+        "marked": "0",
+        "down": "0",
+        "bolted": "0"
+      }
+    },
+    {
+      "on": "shore",
+      "spawn": "angler",
+      "count": "1",
+      "child_stats": {
+        "stealth": "0.3",
+        "patience": "0.4",
+        "noise": "0.1",
+        "shots": "0",
+        "learned": "0"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "on": "shore",
+      "set": "day",
+      "expr": "day + 1"
+    },
+    {
+      "on": "shore",
+      "set": "wind",
+      "expr": "clamp(wind + 0.1*chance(0.5) - 0.1*chance(0.5), 0.05, 1)"
+    },
+    {
+      "on": "shore",
+      "set": "alarm",
+      "expr": "clamp(alarm*0.82 + 0.55*noise_up*(0.4 + 0.6*wind), 0, 1)"
+    },
+    {
+      "on": "angler",
+      "set": "noise",
+      "expr": "clamp(noise*0.65, 0, 1)"
+    },
+    {
+      "on": "shore",
+      "set": "grass",
+      "expr": "clamp(grass + 0.03*(1 - grass) - 0.06*graze_draw, 0.05, 1)"
+    },
+    {
+      "on": "fish",
+      "set": "hunger",
+      "expr": "clamp(hunger + 0.02, 0, 1)"
+    },
+    {
+      "on": "fish",
+      "set": "fear",
+      "expr": "clamp(fear*0.88 + 0.9*alarm_s*hearing*(0.4 + 0.6*wind_s), 0, 1)"
+    },
+    {
+      "on": "fish",
+      "set": "distance",
+      "expr": "clamp(distance, 0.05, 1)"
+    },
+    {
+      "on": "shore",
+      "set": "school",
+      "expr": "child_count() - 1"
+    },
+    {
+      "on": "angler",
+      "set": "lure",
+      "expr": "clamp(lure*0.9, 0, 1)"
+    }
+  ],
+  "rollups": [
+    {
+      "parent": "shore",
+      "child_stat": "noise",
+      "parent_stat": "noise_up",
+      "reduce": "max"
+    },
+    {
+      "parent": "shore",
+      "child_stat": "took",
+      "parent_stat": "graze_draw",
+      "reduce": "sum",
+      "drain": true
+    },
+    {
+      "parent": "shore",
+      "child_stat": "lure",
+      "parent_stat": "lure_up",
+      "reduce": "max"
+    }
+  ],
+  "broadcasts": [
+    {
+      "parent_stat": "over",
+      "child_stat": "over_s",
+      "gain": 1
+    },
+    {
+      "parent_stat": "alarm",
+      "child_stat": "alarm_s",
+      "gain": 1
+    },
+    {
+      "parent_stat": "wind",
+      "child_stat": "wind_s",
+      "gain": 1
+    },
+    {
+      "parent_stat": "grass",
+      "child_stat": "grass_s",
+      "gain": 1
+    },
+    {
+      "parent_stat": "lure_up",
+      "child_stat": "lure_s",
+      "gain": 1
+    }
+  ],
+  "actions": [
+    {
+      "on": "fish",
+      "name": "graze",
+      "score": "gt(hunger,0.3)*(0.4 + 0.5*grass_s)*(1 - fear)",
+      "effects": [
+        {
+          "op": "add",
+          "stat": "hunger",
+          "expr": "-0.12"
+        },
+        {
+          "op": "set",
+          "stat": "took",
+          "expr": "0.1"
+        },
+        {
+          "op": "add",
+          "stat": "distance",
+          "expr": "-0.04*boldness"
+        },
+        {
+          "op": "add",
+          "stat": "energy",
+          "expr": "0.02"
+        }
+      ]
+    },
+    {
+      "on": "fish",
+      "name": "flee",
+      "score": "gt(fear,0.6)*gt(energy,0.1)*1.6",
+      "effects": [
+        {
+          "op": "add",
+          "stat": "distance",
+          "expr": "0.18"
+        },
+        {
+          "op": "add",
+          "stat": "energy",
+          "expr": "-0.1"
+        },
+        {
+          "op": "add",
+          "stat": "fear",
+          "expr": "-0.14"
+        }
+      ]
+    },
+    {
+      "on": "fish",
+      "name": "rest",
+      "score": "lt(energy,0.35)*0.9",
+      "effects": [
+        {
+          "op": "add",
+          "stat": "energy",
+          "expr": "0.12"
+        }
+      ]
+    },
+    {
+      "on": "fish",
+      "name": "drift",
+      "score": "0.25 + 0.15*chance(0.5)",
+      "effects": [
+        {
+          "op": "add",
+          "stat": "distance",
+          "expr": "0.12*chance(0.5) - 0.06"
+        }
+      ]
+    },
+    {
+      "on": "angler",
+      "name": "cast",
+      "score": "lt(lure,0.3)*lt(over_s,0.5)*(0.6 + 0.4*chance(0.5))",
+      "effects": [
+        {
+          "op": "set",
+          "stat": "lure",
+          "expr": "1"
+        },
+        {
+          "op": "add",
+          "stat": "noise",
+          "expr": "0.35"
+        },
+        {
+          "op": "add",
+          "stat": "casts",
+          "expr": "1"
+        }
+      ]
+    },
+    {
+      "on": "angler",
+      "name": "wait_out",
+      "score": "gt(lure,0.25)*0.9",
+      "effects": [
+        {
+          "op": "add",
+          "stat": "patience",
+          "expr": "0.03"
+        },
+        {
+          "op": "set",
+          "stat": "noise",
+          "expr": "0.02"
+        }
+      ]
+    },
+    {
+      "on": "fish",
+      "name": "tempted",
+      "score": "lure_s*affinity*(0.4 + 0.6*hunger)*(1 - fear)*gt(distance,0.25)*1.2",
+      "effects": [
+        {
+          "op": "add",
+          "stat": "distance",
+          "expr": "-0.07*affinity"
+        }
+      ]
+    },
+    {
+      "on": "fish",
+      "name": "strike",
+      "score": "lure_s*gt(hunger,0.3)*lt(distance,0.3)*lt(fear,0.5)*(0.4 + 0.6*boldness)*affinity*3.5",
+      "effects": [
+        {
+          "op": "set",
+          "stat": "wounded",
+          "expr": "chance(0.35 + 0.5*affinity)"
+        }
+      ]
+    },
+    {
+      "on": "fish",
+      "name": "landed",
+      "score": "gt(wounded,0.5)*10",
+      "effects": [
+        {
+          "op": "despawn"
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "on": "shore",
+      "when": "gt(day,179.5)*lt(won,0.5)*lt(over,0.5)",
+      "label": "dusk falls — time is up, empty-handed",
+      "do": [
+        {
+          "op": "set",
+          "stat": "over",
+          "expr": "1"
+        }
+      ]
+    },
+    {
+      "on": "fish",
+      "when": "gt(fear,0.75)*lt(bolted,0.5)",
+      "label": "one bolts — panic flashing through the crowd",
+      "do": [
+        {
+          "op": "set",
+          "stat": "bolted",
+          "expr": "1"
+        }
+      ]
+    },
+    {
+      "on": "fish",
+      "when": "gt(wounded,0.5)*lt(down,0.5)",
+      "label": "a strike — the line goes taut, and it's landed",
+      "do": [
+        {
+          "op": "set",
+          "stat": "down",
+          "expr": "1"
+        }
+      ]
+    },
+    {
+      "on": "shore",
+      "when": "lt(school,7.5)*lt(blood,0.5)",
+      "label": "first catch of the day",
+      "do": [
+        {
+          "op": "set",
+          "stat": "blood",
+          "expr": "1"
+        }
+      ]
+    },
+    {
+      "on": "shore",
+      "when": "lt(school,3.5)*lt(won,0.5)",
+      "label": "★ FIVE IN THE BUCKET BEFORE DUSK — the water gave",
+      "do": [
+        {
+          "op": "set",
+          "stat": "won",
+          "expr": "1"
+        },
+        {
+          "op": "set",
+          "stat": "over",
+          "expr": "1"
+        }
+      ]
+    }
+  ]
+}
