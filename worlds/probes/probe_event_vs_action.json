@@ -1,0 +1,21 @@
+{
+  "_note": "DOUBT-PROBE (is `event` a distinct primitive, or sugar for a score-gated action?): stat x climbs. TWO independent one-shot transitions watch the SAME threshold x>0.5 — one via an EVENT (rising-edge), one via an ACTION with a guard-stat gate. If both fire exactly once at the same tick, then on EXPRESSIVENESS grounds an action can replicate an event's one-shot semantics -> the count 'six' is a slice, not an irreducible basis. (The real reason events still earn their keep is LOD: events skip coarse entities, plain rules/actions differ — that's a runtime distinction, not an expressiveness one.)",
+  "rng_seed": 1,
+  "seed": [
+    { "kind": "thing", "name": "Rising", "reveal": true,
+      "stats": { "x": 0, "flag_evt": 0, "flag_act": 0 } }
+  ],
+  "rules": [
+    { "on": "thing", "set": "x", "expr": "clamp(x + 0.05, 0, 2)" }
+  ],
+  "actions": [
+    { "on": "thing", "name": "ACTION_crosses_half",
+      "score": "gt(x,0.5)*lt(flag_act,0.5)",
+      "effects": [ { "op": "set", "stat": "flag_act", "expr": "1" } ] }
+  ],
+  "events": [
+    { "on": "thing", "when": "gt(x,0.5)*lt(flag_evt,0.5)",
+      "label": "EVENT: x crossed 0.5",
+      "do": [ { "op": "set", "stat": "flag_evt", "expr": "1" } ] }
+  ]
+}

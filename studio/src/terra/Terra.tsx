@@ -42,14 +42,13 @@ import './terra.css';
 // (galaxy/system/body variance included). No hash → plain Veranholm, unchanged.
 // Uninhabited templates are forced 'settled' until the geology-only mode lands.
 import { templeFor, composeSpecFor, bodyLaws, type SurfaceTemplate, type BodyLaws } from '../temple/templates';
-const ARRIVAL: { tpl: SurfaceTemplate; seed: number; laws: BodyLaws; settled: boolean; density: number; name: string; note: string } | null = (() => {
-  // …~<settled 0|1>~<name>[~d<density×100>]  — density is an OPTIONAL trailing
-  // segment (older links + moons/roids omit it → 0). It's the engine-only life
-  // MAGNITUDE, carried from the orbital fact sheet so the surface can spawn the
-  // right amount of fauna. Never shown; it only shapes how much you find.
-  const m = location.hash.match(/^#x=([^~]+)~(-?\d+)~(-?\d+)~(-?\d+)~(-?\d+)~([01])~([^~]*)(?:~d(\d+))?$/);
+const ARRIVAL: { tpl: SurfaceTemplate; seed: number; laws: BodyLaws; settled: boolean; density: number; stray: boolean; name: string; note: string } | null = (() => {
+  // …~<settled 0|1>~<name>[~d<density×100>][~s1]  — d = life MAGNITUDE (fauna count);
+  // s1 = STRAY (a rogue star / field-galaxy world — isolation makes its fauna rarer).
+  // Both are OPTIONAL trailing segments (older links / normal worlds omit them).
+  const m = location.hash.match(/^#x=([^~]+)~(-?\d+)~(-?\d+)~(-?\d+)~(-?\d+)~([01])~([^~]*)(?:~d(\d+))?(?:~s(1))?$/);
   if (!m) return null;
-  const [, nk, u, g, s, b, lf, nm, dens] = m;
+  const [, nk, u, g, s, b, lf, nm, dens, stray] = m;
   const r = templeFor({ u: +u, g: +g, s: +s, b: +b }, nk);
   const seed = Math.abs(((+b | 0) ^ ((+u | 0) * 31)) % 999983) || 7;
   return {
@@ -58,6 +57,7 @@ const ARRIVAL: { tpl: SurfaceTemplate; seed: number; laws: BodyLaws; settled: bo
     laws: bodyLaws(seed, nk),          // ITS liquid coverage, ice line, relief — from ITS address
     settled: lf === '1',               // life fact → whether anyone ever built here
     density: dens ? Math.min(1, +dens / 100) : 0,   // life abundance (0 if link omits it)
+    stray: stray === '1',              // a rogue/field world — its fauna skew rare
     name: decodeURIComponent(nm), note: r.note,
   };
 })();
@@ -148,7 +148,7 @@ export default function Terra() {
         // field chain, and its LIFE fact decides whether settlements exist at
         // all (no life → no districts, no roads, no bridges — nobody built them)
         const spec = ARRIVAL
-          ? composeSpecFor(ARRIVAL.tpl, sd, ARRIVAL.laws, ARRIVAL.settled, ARRIVAL.density)
+          ? composeSpecFor(ARRIVAL.tpl, sd, ARRIVAL.laws, ARRIVAL.settled, ARRIVAL.density, ARRIVAL.stray)
           : { ...(worldSpec as object), rng_seed: sd };
         const t0 = performance.now();
         const w = await createWorld(JSON.stringify(spec));

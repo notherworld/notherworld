@@ -7,9 +7,10 @@
 // the worlds right now.
 import { useState } from 'react';
 import { createWorld, type Snapshot } from '../owos';
-import { starOf, planetOf, galaxyStars, giantGravity, type StarLaw } from '../view/facts';
+import { starOf, planetOf, galaxyStars, giantGravity, universeLaws, type StarLaw } from '../view/facts';
 import { SCANNER_TIERS, HOVER_TIERS } from '../game/ship';
 import { speciesKey, breedKey, taxonName, speciesRarity, SPECIES_TOTAL, BREEDS_TOTAL, type Stats } from '../design/creature';
+import { strayFaunaBias, meanFaunaRarityRank } from '../temple/templates';
 import hotelSpec from '../../../worlds/hotel.json';
 import craftSpec from '../../../worlds/craft.json';
 import emberholdSpec from '../../../worlds/emberhold.json';
@@ -84,6 +85,64 @@ const PROOFS: Proof[] = [
       if (!(hotAvg > coldAvg + 20)) throw new Error(`hot stars don't yield hotter planets: cold ${coldAvg.toFixed(0)}K vs hot ${hotAvg.toFixed(0)}K — coupling broken`);
       const coldLifePct = 100 * coldLife / Math.max(1, coldN), hotLifePct = 100 * hotLife / Math.max(1, hotN);
       return `${planets.toExponential(1)} addressable planets — ${(planets / NMS).toExponential(1)}× No Man's Sky, ${(planets / REAL).toExponential(1)}× the real observable universe · COUPLED: cold-star planets avg ${coldAvg.toFixed(0)}K (${coldLifePct.toFixed(0)}% alive) vs hot-star ${hotAvg.toFixed(0)}K (${hotLifePct.toFixed(0)}% alive) — the star causes the planet`;
+    },
+  },
+  {
+    id: 'epoch',
+    title: 'time is a place: universes age, cool, and die — without moving anything else',
+    what:
+      'Three checks on the cosmic-epoch layer. (A) THE ARROW OF TIME: ranks thousands of universes by age and shows the oldest quartile reads both COLDER (lower bg temp) and DEADER (lower life rate) than the youngest — because bg temp and life now DESCEND from age (expansion cools the background, T∝1/a, and starves free energy) instead of being independent dice. (B) HEAT DEATH ON THE GROUND: threads each universe\'s age into planetOf and shows surface life falling toward a floor as epoch rises — and orbital detectability collapsing to ZERO in an old universe (survivors hide below the scanner) — while epoch=0 stays BIT-IDENTICAL to the base law. (C) PERMANENCE: the same planets at a young vs a heat-dead epoch keep identical orbit, temperature, size and geography — heat death EMPTIES a world, it never rebuilds it.',
+    why:
+      'Time joins scale, install-size and lore as another thing that is COMPUTED, not stored: a universe does not grind down in a database — you evaluate the same address at a later age and it derives colder and emptier. (A) proves age is now causal, not a label. (B) proves an ancient universe genuinely feels like a graveyard when you land — yet, crucially, epoch=0 identity means this whole mortality layer was added WITHOUT shifting a single other proof (no re-baseline). (C) is the load-bearing law: epoch touches only how much life is present, never the structural genome, so a species\' body plan at an address is eternal — heat death can extinguish a lineage but never redraw it. Mortality as a place you visit, permanence intact.',
+    native: '(facts.ts::universeLaws + planetOf(epoch) — the same derivation nother\'s dive threads)',
+    run: async () => {
+      // (A) THE ARROW OF TIME — rank universes by age; oldest read colder AND deader.
+      const N = 6000; const us = [];
+      for (let s = 1; s <= N; s++) us.push(universeLaws((Math.imul(s, 2654435761) >>> 0)));
+      us.sort((a, b) => a.ageGyr - b.ageGyr);
+      const q = Math.floor(N / 4);
+      const mean = (arr: typeof us, k: 'bgTempK' | 'lifeRate' | 'ageGyr') => arr.reduce((t, r) => t + r[k], 0) / arr.length;
+      const young = us.slice(0, q), old = us.slice(3 * q);
+      const yTemp = mean(young, 'bgTempK'), oTemp = mean(old, 'bgTempK');
+      const yLife = mean(young, 'lifeRate'), oLife = mean(old, 'lifeRate');
+      if (!(oTemp < yTemp)) throw new Error(`old universes not colder: young ${yTemp.toFixed(2)}K vs old ${oTemp.toFixed(2)}K`);
+      if (!(oLife < yLife)) throw new Error(`old universes not deader: young ${yLife.toFixed(1)}/M vs old ${oLife.toFixed(1)}/M`);
+
+      // (B) HEAT DEATH ON THE GROUND — presence + orbital detectability decay with epoch;
+      //     epoch=0 must be bit-identical to the un-aged base law (so no other proof drifts).
+      const ground = (epoch?: number) => {
+        let pl = 0, al = 0, det = 0;
+        for (let s = 1; s <= 1200; s++) {
+          const sseed = (Math.imul(s, 2654435761) >>> 0);
+          const star = starOf(sseed);
+          for (let i = 0; i < star.planets; i++) {
+            const pseed = (Math.imul(sseed ^ (i + 1), 0x9e3779b1) >>> 0);
+            const p = epoch === undefined ? planetOf(pseed, i, star) : planetOf(pseed, i, star, 0.985, epoch);
+            pl++; if (p.hasLife) al++; if (p.density > 0.45) det++;
+          }
+        }
+        return { alive: al / pl, det: det / pl };
+      };
+      const g0 = ground(0), gBase = ground(undefined), gMid = ground(0.5), gDead = ground(0.97);
+      if (!(Math.abs(g0.alive - gBase.alive) < 1e-9 && Math.abs(g0.det - gBase.det) < 1e-9)) throw new Error('epoch=0 is not identical to the base law — it would drift other proofs');
+      if (!(gMid.alive < g0.alive && gDead.alive < gMid.alive)) throw new Error('surface life not decaying with epoch');
+      if (!(gDead.det === 0)) throw new Error(`heat-dead universe still orbit-detectable (${(gDead.det * 100).toFixed(1)}%) — survivors should hide below the scanner`);
+
+      // (C) PERMANENCE — structure is epoch-invariant; heat death empties, never rebuilds.
+      let structOK = true, checked = 0;
+      for (let s = 1; s <= 500 && structOK; s++) {
+        const sseed = (Math.imul(s, 2654435761) >>> 0);
+        const star = starOf(sseed);
+        for (let i = 0; i < star.planets; i++) {
+          const pseed = (Math.imul(sseed ^ (i + 1), 0x9e3779b1) >>> 0);
+          const a = planetOf(pseed, i, star, 0.985, 0), b = planetOf(pseed, i, star, 0.985, 0.97);
+          checked++;
+          if (a.orbit !== b.orbit || a.tempK !== b.tempK || a.sizeKm !== b.sizeKm || a.grid !== b.grid || a.moons !== b.moons || a.rings !== b.rings) { structOK = false; break; }
+        }
+      }
+      if (!structOK) throw new Error('epoch altered a world\'s structure (orbit/temp/size/geography) — permanence broken');
+
+      return `arrow of time: young universes ${yTemp.toFixed(2)}K / ${yLife.toFixed(0)}·M-life vs ancient ${oTemp.toFixed(2)}K / ${oLife.toFixed(0)}·M — colder AND deader · on the ground life falls ${(g0.alive * 100).toFixed(0)}%→${(gDead.alive * 100).toFixed(0)}% alive and orbital detection ${(g0.det * 100).toFixed(0)}%→0% (heat-dead survivors hide below the scanner) · epoch=0 ≡ base law, so no other proof drifts · ${checked} worlds keep identical structure across epoch — heat death empties, never rebuilds`;
     },
   },
   {
@@ -413,6 +472,27 @@ const PROOFS: Proof[] = [
       const tiers = new Set([0, 500, 1500, 3000, 3999].map((i) => speciesRarity(mk(i)).tier));
       if (tiers.size < 2) throw new Error('rarity has no spread — every species reads the same tier');
       return `${SPECIES_TOTAL.toLocaleString()} species · ${BREEDS_TOTAL.toLocaleString()} breeds · ${keys.size} distinct species keys from 4k genomes, all in-range + stable · rarity tiers vary (${[...tiers].join(', ')})`;
+    },
+  },
+  {
+    id: 'stray',
+    title: 'rarer places breed rarer creatures — provably',
+    what:
+      'A stray world (a rogue star flung between galaxies, or a lone field galaxy in a cosmic void) biases its fauna toward the rare tail of the taxonomy. That bias is chosen at COMPOSE time — a deterministic gene-offset search that scores candidates against the cached rarity table and picks the rarest. This measures the mean rarity rank (0 common … 4 legendary) of the fauna a normal world rolls vs. the same world with its stray bias, across thousands of addresses.',
+    why:
+      'Where you find something should inform how special it is — a creature clinging to a dead rock adrift in the intergalactic dark ought to be a genuine trophy, not the same critter you catch on any green world. "Rare" here is a POPULATION percentile (a species\'s frequency vs. all other realized body-plans), which no per-spawn formula can express — so the bias is searched deterministically at compose time and written onto the world seed. Same address → same rare fauna for everyone. This row proves the stray lift is real and sizeable; if it ever vanished, stray worlds would be no more special than any other.',
+    native: '(temple/templates.ts::strayFaunaBias — the compose-time bias nother threads to terra)',
+    run: async () => {
+      let norm = 0, str = 0, n = 0;
+      for (let seed = 1; seed < 4000; seed++) {
+        const bias = strayFaunaBias(seed);
+        norm += meanFaunaRarityRank(seed, 0);
+        str += meanFaunaRarityRank(seed, bias);
+        n++;
+      }
+      const nAvg = norm / n, sAvg = str / n, lift = sAvg - nAvg;
+      if (!(lift > 0.4)) throw new Error(`stray fauna barely rarer (normal ${nAvg.toFixed(2)} vs stray ${sAvg.toFixed(2)}) — the bias isn't biting`);
+      return `stray fauna are measurably rarer: mean rarity rank ${nAvg.toFixed(2)} (normal) → ${sAvg.toFixed(2)} (stray) over ${n.toLocaleString()} addresses — a +${lift.toFixed(2)} lift (0 common … 4 legendary), deterministic per address`;
     },
   },
 ];

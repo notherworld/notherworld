@@ -24,3 +24,6 @@ CLAUDE.local.md
 # private working docs (feature tally + idea ledger — never commit)
 FEATURES.local.md
 IDEAS.local.md
+# ANY *.local.md is private working material — never commit (the `*.local` rule
+# above does NOT match a .md suffix, which let DEVLOG/NOTES slip through once).
+*.local.md

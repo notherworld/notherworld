@@ -1,0 +1,18 @@
+{
+  "_note": "DOUBT-PROBE follow-up: the naive edge_mean rule diffused but LEAKED (mean decayed). Hypothesis: edge_mean = a non-conservative consensus update (degree-biased at chain ends). The CONSERVATIVE form is the symmetric graph Laplacian: food += k*(edge_sum(neighbors) - degree*self), degree = edge_count(border). Predict: field (min heat) still rises = diffusion, AND mean food stays FLAT = conservation. If so: continuous conservative dynamics IS expressible with zero new primitives — but requires the author to pick the flux form, not the averaging form. Physics knowledge, not an engine gap.",
+  "rng_seed": 1,
+  "seed": [
+    { "kind": "hold", "name": "Bar", "reveal": true, "stats": { "field": 0 } }
+  ],
+  "generators": [
+    { "on": "hold", "spawn": "cell", "count": "8", "chain": "border",
+      "child_stats": { "food": "eq(index,0)" } }
+  ],
+  "rules": [
+    { "on": "cell", "set": "food",
+      "expr": "clamp(food + 0.2*(edge_sum(border,food) - edge_count(border)*food), 0, 2)" }
+  ],
+  "rollups": [
+    { "parent": "hold", "child_stat": "food", "parent_stat": "field", "reduce": "min" }
+  ]
+}

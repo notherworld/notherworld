@@ -17,6 +17,7 @@
 
 import atlasSpec from './base-world.json';
 import { type Dists } from '../view/facts';
+import { speciesRarity, type Stats } from '../design/creature';
 
 export interface GeologyLaws {
   seaLevel: number;      // below this elevation = the liquid (whatever it is here)
@@ -341,7 +342,53 @@ export function bodyLaws(seed: number, nk: string): BodyLaws {
 // amplitude/centre from relief, water from ITS sea level, snow from ITS ice
 // line) and `settled` comes from the body's LIFE fact — an unexplored icy moon
 // gets NO districts, NO roads, NO bridges, because nobody is there to build them.
-export function composeSpecFor(t: SurfaceTemplate, seed: number, laws: BodyLaws, settled: boolean, density = 1): object {
+// ── STRAY RARE-FAUNA BIAS (Fable's compose-time mechanism). A stray world's fauna
+// should skew to the rare tail of the taxonomy — but "rare" is a POPULATION percentile
+// (design/creature.ts::speciesRarity, cached), not expressible in the JSON genome DSL.
+// So we search HERE, deterministically: try N candidate gene-OFFSETS, score each by the
+// mean rarity of the body-plans it would produce, and write the winning offset onto the
+// city seed as `fauna_bias` (the fauna `gene` formula adds it). Same shape as the laws
+// hopping onto the seed. Deterministic → same address, same offset, same rare fauna for
+// everyone. Version-bumps visited worlds if changed (do pre-launch; guarded in /proofs).
+const md = (x: number) => ((x % 1) + 1) % 1;
+// the discrete body-plan a (species, gene) rolls — mirrors worlds/terra genome floors.
+function planFor(species: number, gene: number): Stats {
+  return {
+    torso: Math.floor(11.99 * md(species * 0.777 + gene * 1.7)),
+    head: Math.floor(15.99 * md(species * 0.531 + gene * 0.9)),
+    legs: Math.floor(9.99 * md(species * 0.923 + gene * 2.7)),
+    tail: Math.floor(9.99 * md(species * 0.389 + gene * 3.3)),
+    pattern: Math.floor(9.99 * md(species * 0.687 + gene * 2.9)),
+  };
+}
+const TIER_RANK: Record<string, number> = { common: 0, uncommon: 1, rare: 2, 'very rare': 3, legendary: 4 };
+/** deterministic gene-offset in (0,1) that maximises mean fauna rarity for this world.
+ *  Exported so /proofs can assert stray-biased fauna are measurably rarer than normal. */
+export function strayFaunaBias(seed: number): number {
+  let best = 0, bestScore = -1;
+  for (let c = 0; c < 12; c++) {
+    const offset = (c + 0.5) / 12;                          // 12 candidate offsets
+    let sum = 0;
+    // score across the species this world spawns (species ∈ 0..~5) at a few genes
+    for (let sp = 0; sp < 6; sp++) {
+      const gene = md((seed % 997) / 997 + offset);
+      sum += TIER_RANK[speciesRarity(planFor(sp, gene)).tier] ?? 0;
+    }
+    if (sum > bestScore) { bestScore = sum; best = offset; }
+  }
+  return best;
+}
+
+/** mean rarity rank (0 common … 4 legendary) of the fauna a world's gene+bias rolls —
+ *  the /proofs guard for the stray bias. Higher = rarer creatures. */
+export function meanFaunaRarityRank(seed: number, bias: number): number {
+  const gBase = (seed % 997) / 997;
+  let sum = 0;
+  for (let sp = 0; sp < 6; sp++) sum += (TIER_RANK[speciesRarity(planFor(sp, md(gBase + bias))).tier] ?? 0);
+  return sum / 6;
+}
+
+export function composeSpecFor(t: SurfaceTemplate, seed: number, laws: BodyLaws, settled: boolean, density = 1, stray = false): object {
   const A = (0.62 * laws.relief).toFixed(3);
   const B = (0.65 - 0.31 * laws.relief).toFixed(3);      // keep the mean; scale the spread
   const D = (0.16 * laws.relief).toFixed(3);
@@ -371,7 +418,12 @@ export function composeSpecFor(t: SurfaceTemplate, seed: number, laws: BodyLaws,
     // fauna count on the surface: a sparse hidden-life world spawns a handful of
     // critters across many districts (finding one is the game), a teeming world
     // swarms. Base Veranholm keeps 1 (its own fallback). 0 → no fauna at all.
-    top.stats = { ...(top.stats ?? {}), air: laws.air, gravity: laws.gravity, heat: laws.heat, lush: laws.lush, life_density: density };
+    // STRAY worlds (rogue star / field galaxy): isolation breeds oddity. Their fauna
+    // skew RARE via a deterministic compose-time gene-offset (fauna_bias, read by the
+    // fauna `gene` formula), and they run sparser (extremophile — density trimmed).
+    const faunaBias = stray ? strayFaunaBias(seed) : 0;
+    const dens = stray ? density * 0.6 : density;          // fewer, but special
+    top.stats = { ...(top.stats ?? {}), air: laws.air, gravity: laws.gravity, heat: laws.heat, lush: laws.lush, life_density: dens, fauna_bias: faunaBias };
   }
 
   if (!settled) {

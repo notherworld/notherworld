@@ -1,0 +1,17 @@
+{
+  "_note": "DOUBT-PROBE (continuous dynamics = a 7th primitive?): can a PURE RULE over neighbor edges reproduce continuous heat diffusion WITH conservation, using zero new machinery? 8 cells in a border-chain, cell 0 starts hot. Rule: food += k*(edge_mean(border,food) - food) = the discretized heat equation. Watch: mean food (should stay ~0.125 = CONSERVATION), and hold.field = MIN cell heat via rollup (should rise 0 -> 0.125 as the front reaches the coldest cell = DIFFUSION). If both happen, continuous field evolution is expressible as rules-over-neighbors, no 7th prim.",
+  "rng_seed": 1,
+  "seed": [
+    { "kind": "hold", "name": "Bar", "reveal": true, "stats": { "field": 0 } }
+  ],
+  "generators": [
+    { "on": "hold", "spawn": "cell", "count": "8", "chain": "border",
+      "child_stats": { "food": "eq(index,0)" } }
+  ],
+  "rules": [
+    { "on": "cell", "set": "food", "expr": "clamp(food + 0.25*(edge_mean(border,food) - food), 0, 1)" }
+  ],
+  "rollups": [
+    { "parent": "hold", "child_stat": "food", "parent_stat": "field", "reduce": "min" }
+  ]
+}

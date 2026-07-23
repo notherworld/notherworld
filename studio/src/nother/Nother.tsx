@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { describeUniverse, describeGalaxy, describeSuper, properName } from '../view/lexicon';
-import { universeFacts, superFacts, galaxyFacts, galaxyStars, starOrdinalCell, starOf, planetOf, blackHoleOf, galaxyCoreOf, setDists, smallBodyLife, giantGravity } from '../view/facts';
+import { universeFacts, universeLaws, superFacts, galaxyFacts, galaxyStars, starOrdinalCell, starOf, planetOf, blackHoleOf, galaxyCoreOf, setDists, smallBodyLife, giantGravity, rogueAt, rogueStarOf, fieldGalaxyAt } from '../view/facts';
 import { loadCharter } from '../temple/templates';
 import { loadShip, fidelityOf, hoverOf } from '../game/ship';
 import { ShipPanel } from '../game/ShipPanel';
@@ -60,6 +60,7 @@ interface Uni {
   nucHue: number; nucR: number; nucOff: number;  // the nucleus
   orgs: Organelle[];                             // organelles floating in the cytoplasm
   grain: number;                                 // cytoplasm speckle density
+  cooling: number;                               // epoch dial 0 (young) … 1 (heat-dead): fades the cell
   desc: string; facts: string;                   // deterministic per-address text + data
 }
 function visualsFor(seed: number): Omit<Uni, 'addr' | 'base' | 'wx' | 'wy'> {
@@ -91,6 +92,7 @@ function visualsFor(seed: number): Omit<Uni, 'addr' | 'base' | 'wx' | 'wy'> {
     rot: (rnd(seed, 24) - 0.5) * 0.18, harms, squash, tilt,
     nucHue: hue + (rnd(seed, 27) - 0.5) * 40, nucR: 0.22 + 0.14 * rnd(seed, 28),
     nucOff: (rnd(seed, 29) - 0.5) * 0.35, orgs, grain: 0.4 + 0.6 * rnd(seed, 31),
+    cooling: universeLaws(seed).coolingN,       // the cell ages: old = cold, dim, near-dead
     desc: describeUniverse(seed), facts: universeFacts(seed),
   };
 }
@@ -190,6 +192,15 @@ function galAt(scBase: number, uaddr: number, scaddr: number, scname: string, cx
     rot: (rnd(seed, 24) - 0.5) * 0.5, pts,
   };
 }
+// a FIELD GALAXY — a lone galaxy in a cosmic void, derived from the UNIVERSE base
+// (no supercluster parent). cell[2] === -1 marks it; scaddr = uaddr as its stand-in.
+// Its facts note the isolation. Diveable exactly like any galaxy (a synthetic SC
+// carries the layer type). Same shareable-address round-trip discipline as rogues.
+function fieldGalAt(uBase: number, uaddr: number, cx: number, cy: number, CELL: number): Gal {
+  const g = galAt(uBase, uaddr, uaddr, 'the void', cx, cy, 0, CELL);
+  const isolated = `  FIELD GALAXY · adrift in a cosmic void\n  no supercluster — the nearest is millions of ly off`;
+  return { ...g, cell: [cx, cy, -1], name: `${properName(g.gseed)} (field)`, facts: `${isolated}\n${g.facts}` };
+}
 
 // ── RUNG 3: A STAR — where the facts become LAWS: class/temp/mass/worlds/life all
 // roll from the address (facts.ts starOf), and the drawn color and size follow the
@@ -201,6 +212,7 @@ interface Star {
   bh: boolean; bhExit: number;                       // black holes: where the horizon LEADS
   tempK: number; planets: number; belts: number; life: string;   // the system its dive will open
   wx: number; wy: number; r: number; hue: number; sat: number; phase: number; tw: number;
+  rogue?: boolean;                                   // flung out of its galaxy — adrift in the void
 }
 function starAt(gBase: number, uaddr: number, scaddr: number, gaddr: number, gname: string, cx: number, cy: number, i: number, CELL: number): Star {
   const seed = mix(mix(gBase ^ cellHash(cx, cy)) ^ Math.imul(i + 1, 0x9e3779b1));
@@ -227,6 +239,25 @@ function starAt(gBase: number, uaddr: number, scaddr: number, gaddr: number, gna
   };
 }
 
+// ROGUE STAR — a star adrift in the INTERGALACTIC dark (a cell OUTSIDE the galaxy
+// disc that rolled rogueAt). Reuses the Star shape so it renders/hovers/dives exactly
+// like any star; its stats + exile lore come from rogueStarOf. Flung from its galaxy
+// eons ago — its isolated worlds skew to rare life (the compose-time bias, §rogue).
+function rogueStarAt(gBase: number, uaddr: number, scaddr: number, gaddr: number, gname: string, cx: number, cy: number, CELL: number): Star {
+  const seed = mix(mix(gBase ^ cellHash(cx, cy)) ^ 0x9e37_79b9);   // fixed slot: one rogue per cell
+  const addr = 100 + (seed % 999900);
+  const law = rogueStarOf(seed);
+  return {
+    addr, uaddr, scaddr, gaddr, gname, name: `Rogue ${properName(seed, 9)}`, base: mix(seed ^ 0x1b873593),
+    cell: [cx, cy, -1] as [number, number, number],   // i=-1 marks a rogue in the address
+    wx: cx * CELL + rnd(seed, 1) * CELL, wy: cy * CELL + rnd(seed, 2) * CELL,
+    phase: 6.283 * rnd(seed, 16),
+    facts: law.facts, cls: law.cls, bh: false, bhExit: 0,
+    tempK: law.tempK, planets: law.planets, belts: law.belts, life: law.life,
+    r: law.r * 0.85, hue: law.hue, sat: law.sat, tw: 1.6 + 1.8 * rnd(seed, 17), rogue: true,
+  };
+}
+
 // a star's SOLAR SYSTEM — exactly the worlds its fact sheet promised, each typed by
 // real orbital physics (planetOf), each a named sub-address. A planet's surface is
 // an entire Atlas world — that handoff is the ladder's final rung.
@@ -249,10 +280,14 @@ interface Planet {
 const ORES = ['iron', 'nickel', 'water ice', 'carbon', 'silicates', 'platinum', 'gold'];
 function planetsFor(s: Star): Planet[] {
   const starLaw = { cls: s.cls, tempK: s.tempK, hue: s.hue, sat: s.sat, r: s.r, planets: s.planets, belts: s.belts, life: s.life, facts: '' };
+  // COSMIC EPOCH: this universe's age dial, reproduced from its address exactly as the
+  // HUD + cell fade do (visualsFor derives from base = mix(addr); uaddr carries addr).
+  // An ancient universe's worlds land deader — heat death made walkable. See IDEAS step 2.
+  const epoch = universeLaws(mix(s.uaddr)).coolingN;
   return Array.from({ length: s.planets }, (_, i) => {
     const pseed = mix(s.base ^ Math.imul(i + 1, 0x9e3779b1));
     const addr = 100 + (pseed % 999900);
-    const law = planetOf(pseed, i, starLaw, fidelityOf(SHIP));   // read through YOUR scanner
+    const law = planetOf(pseed, i, starLaw, fidelityOf(SHIP), epoch);   // read through YOUR scanner, at this universe's epoch
     const moonsD: Moon[] = Array.from({ length: law.moons }, (_, j) => {
       const mseed = mix(pseed ^ Math.imul(j + 1, 0xc2b2ae35));
       const icy = rnd(mseed, 3) > 0.5;
@@ -410,7 +445,20 @@ export default function Nother() {
     if (hv.kind === 'uni') next = { kind: 'universe', u: hv.u };
     else if (hv.kind === 'sc' && l.kind === 'universe') next = { kind: 'super', u: l.u, sc: hv.sc };
     else if (hv.kind === 'gal' && l.kind === 'super') next = { kind: 'galaxy', u: l.u, sc: l.sc, g: hv.g };
+    // a FIELD GALAXY hovers at the universe layer (cell[2] === -1, no supercluster).
+    // Dive to its galaxy, with a synthetic SC stand-in (the void it drifts in).
+    else if (hv.kind === 'gal' && hv.g.cell[2] === -1 && l.kind === 'universe') {
+      const vsc = scAt(l.u.base, l.u.addr, hv.g.cell[0], hv.g.cell[1], 0, CELL_SC);
+      next = { kind: 'galaxy', u: l.u, sc: { ...vsc, wx: hv.g.wx, wy: hv.g.wy, name: 'the void' }, g: hv.g };
+    }
     else if (hv.kind === 'star' && l.kind === 'galaxy') next = { kind: 'system', u: l.u, sc: l.sc, g: l.g, s: hv.s };
+    // a ROGUE star lives at the super layer (no galaxy) — dive straight to its
+    // system, with a synthetic Gal stand-in (the void it drifts in) so the layer
+    // type holds and back-out surfaces you at the rogue's spot.
+    else if (hv.kind === 'star' && hv.s.rogue && l.kind === 'super') {
+      const vg = galAt(l.sc.base, l.sc.uaddr, l.sc.addr, l.sc.name, hv.s.cell[0], hv.s.cell[1], 0, CELL_G);
+      next = { kind: 'system', u: l.u, sc: l.sc, g: { ...vg, wx: hv.s.wx, wy: hv.s.wy, name: `the drift of ${hv.s.name}` }, s: hv.s };
+    }
     if (!next) return;
     layerRef.current = next;
     camRef.current = { x: 0, y: 0 };
@@ -469,7 +517,45 @@ export default function Nother() {
       }
       return v;
     };
+    // FIELD GALAXIES — lone galaxies adrift in the cosmic VOIDS between supercluster
+    // filaments (real: not every galaxy joins a supercluster). Rare per-cell at the
+    // universe view. A field galaxy is a normal Gal derived from the UNIVERSE base
+    // (cell[2] === -1 marks it), diveable via a synthetic-SC stand-in.
+    const fieldGalCache = new Map<string, Gal[]>();
+    const fieldGalUnis = (u: Uni, cx: number, cy: number): Gal[] => {
+      const k = `f:${u.addr}:${cx},${cy}`; let v = fieldGalCache.get(k);
+      if (!v) {
+        if (fieldGalaxyAt(u.base, cx, cy)) {
+          const fg = fieldGalAt(u.base, u.addr, cx, cy, SCCELL);
+          // FIND THE VOID: gather EVERY supercluster in this cell + the 8 neighbours,
+          // try a ring of candidate spots around the cell centre, and place the field
+          // galaxy at the one FARTHEST from any SC (weighted by SC radius/reach). This
+          // clears neighbour-cell filaments the naive one-SC push missed.
+          const near: { x: number; y: number; r: number }[] = [];
+          for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++)
+            for (const s of scUnis(u, cx + dx, cy + dy)) near.push({ x: s.wx, y: s.wy, r: s.r });
+          if (near.length) {
+            const ccx = (cx + 0.5) * SCCELL, ccy = (cy + 0.5) * SCCELL;
+            let best = { x: fg.wx, y: fg.wy, score: -Infinity };
+            for (let a = 0; a < 12; a++) {
+              const ang = (a / 12) * 6.283;
+              const px = ccx + Math.cos(ang) * SCCELL * 0.55, py = ccy + Math.sin(ang) * SCCELL * 0.55;
+              // score = distance to the NEAREST supercluster (bigger = emptier)
+              let mind = Infinity;
+              for (const s of near) mind = Math.min(mind, Math.hypot(px - s.x, py - s.y) - s.r * 2.4);
+              if (mind > best.score) best = { x: px, y: py, score: mind };
+            }
+            fg.wx = best.x; fg.wy = best.y;
+          }
+          v = [fg];
+        } else v = [];
+        fieldGalCache.set(k, v);
+        if (fieldGalCache.size > 1400) fieldGalCache.clear();
+      }
+      return v;
+    };
     const galCache = new Map<string, Gal[]>();
+    const rogueCache = new Map<string, Star[]>();
     const galUnis = (sc: SC, cx: number, cy: number): Gal[] => {
       const k = `${sc.uaddr}:${sc.addr}:${cx},${cy}`; let v = galCache.get(k);
       if (!v) {
@@ -477,6 +563,22 @@ export default function Nother() {
         v = Array.from({ length: n }, (_, i) => galAt(sc.base, sc.uaddr, sc.addr, sc.name, cx, cy, i, GCELL));
         galCache.set(k, v);
         if (galCache.size > 1400) galCache.clear();
+      }
+      return v;
+    };
+    // ROGUE STARS at the sea-of-galaxies zoom: rare per-cell specks adrift in the
+    // void BETWEEN the galaxy motes. A rogue is a self-contained Star (no galaxy) —
+    // its `cell[2] === -1` marks it, and its host-galaxy fields point at the SC so
+    // it can dive to a system on its own. Deterministic + cached like galUnis.
+    const rogueUnis = (sc: SC, cx: number, cy: number): Star[] => {
+      const k = `r:${sc.uaddr}:${sc.addr}:${cx},${cy}`; let v = rogueCache.get(k);
+      if (!v) {
+        // galaxies fill every cell (1-3 each), so "between galaxies" is POSITIONAL:
+        // a rogue sits at its own spot in the cell, naturally in the gaps — the small
+        // galaxy motes rarely overlap. Rare per-cell roll gates it.
+        v = rogueAt(sc.base, cx, cy) ? [rogueStarAt(sc.base, sc.uaddr, sc.addr, sc.addr, sc.name, cx, cy, GCELL)] : [];
+        rogueCache.set(k, v);
+        if (rogueCache.size > 1400) rogueCache.clear();
       }
       return v;
     };
@@ -628,14 +730,22 @@ export default function Nother() {
           if (sx < -ur * 1.5 || sy < -ur * 1.5 || sx > W + ur * 1.5 || sy > H + ur * 1.5) continue;
           const breathe = 0.5 + 0.5 * Math.sin(t * u.breath + u.phase);
           const pulse = foc && foc.addr === u.addr ? Math.max(0, 1 - (now - foc.at) / 1400) : 0;
-          const bright = (0.6 + 0.45 * breathe) * (1 + pulse * 1.3);
+          // ── COSMIC EPOCH made visible: an aging universe is a dying CELL. `cooling`
+          // (0 young … 1 heat-dead) dims the membrane (vitality), drains its colour
+          // toward cold grey (csat), and — hardest — starves the organelles (the life
+          // inside). A young cell glows warm and busy; an ancient one is a faint, cold
+          // ghost. Same number that cools its bg temp + kills its life on the HUD.
+          const cool = u.cooling;
+          const vitality = 1 - cool * 0.5;                 // membrane/body: a ghost, not gone
+          const csat = u.sat * (1 - cool * 0.6);           // colour drains out with age
+          const bright = (0.6 + 0.45 * breathe) * (1 + pulse * 1.3) * vitality;
           if (mLo) { const d = Math.hypot(mLo.x - sx, mLo.y - sy); if (d < ur && d < hovD) { hovD = d; hov = { kind: 'uni', u }; } }
 
-          const cyto = hsl(u.hue, u.sat, 0.42);
+          const cyto = hsl(u.hue, csat, 0.42);
           const R = ur * 1.35;
           const nx = sx + Math.cos(u.phase) * u.nucOff * ur, ny = sy + Math.sin(u.phase) * u.nucOff * ur;
-          const nucR = u.nucR * ur, nucCol = hsl(u.nucHue, u.sat + 0.15, 0.6);
-          const rimCol = hsl(u.hue, Math.min(1, u.sat + 0.22), 0.74);
+          const nucR = u.nucR * ur, nucCol = hsl(u.nucHue, csat + 0.15, 0.6);
+          const rimCol = hsl(u.hue, Math.min(1, csat + 0.22), 0.74);
           const HALO = 5;
           const bx0 = Math.max(0, (sx - R - HALO) | 0), bx1 = Math.min(W - 1, (sx + R + HALO) | 0);
           const by0 = Math.max(0, (sy - R - HALO) | 0), by1 = Math.min(H - 1, (sy + R + HALO) | 0);
@@ -674,8 +784,8 @@ export default function Nother() {
           const cs = Math.cos(t * u.rot), sn = Math.sin(t * u.rot);
           for (const gg of u.orgs) {
             const gx = (sx + (gg.dx * cs - gg.dy * sn) * Z) | 0, gy = (sy + (gg.dx * sn + gg.dy * cs) * Z) | 0;
-            const [r, gr, b] = hsl(gg.hue, 0.7, gg.kind ? 0.68 : 0.5);
-            const bb = (gg.kind ? 130 : 80) * (0.7 + 0.5 * breathe) * (1 + 0.6 * pulse);
+            const [r, gr, b] = hsl(gg.hue, 0.7 * (1 - cool * 0.6), gg.kind ? 0.68 : 0.5);
+            const bb = (gg.kind ? 130 : 80) * (0.7 + 0.5 * breathe) * (1 + 0.6 * pulse) * (1 - cool * 0.75);
             const put = (dx: number, dy: number, k: number) => {
               const px2 = gx + dx, py2 = gy + dy; if (px2 < 0 || py2 < 0 || px2 >= W || py2 >= H) return;
               const i = (py2 * W + px2) * 3; A[i] += r / 255 * bb * k; A[i + 1] += gr / 255 * bb * k; A[i + 2] += b / 255 * bb * k;
@@ -799,6 +909,34 @@ export default function Nother() {
               }
             }
           }
+
+          // FIELD GALAXIES — a lone spiral adrift in the void between the filaments.
+          // A soft violet mote with a faint spin, distinct from the supercluster
+          // knots. Hover → its isolation facts; click → dive into it (real galaxy).
+          for (let cx = c0x; cx <= c1x; cx++) for (let cy = c0y; cy <= c1y; cy++) {
+            for (const fg of fieldGalUnis(u, cx, cy)) {
+              const sx = (fg.wx - ox) * Z, sy = (fg.wy - oy) * Z;
+              if (sx < -20 || sy < -20 || sx > W + 20 || sy > H + 20) continue;
+              const breathe = 0.5 + 0.5 * Math.sin(t * fg.breath + fg.phase);
+              const bright = 0.7 + 0.5 * breathe;
+              if (mLo) { const d = Math.hypot(mLo.x - sx, mLo.y - sy); if (d < 11 && d < hovD) { hovD = d; hov = { kind: 'gal', g: fg }; } }
+              const RR = 12, rx0 = Math.max(0, (sx - RR) | 0), rx1 = Math.min(W - 1, (sx + RR) | 0);
+              const ry0 = Math.max(0, (sy - RR) | 0), ry1 = Math.min(H - 1, (sy + RR) | 0);
+              for (let y = ry0; y <= ry1; y++) for (let x = rx0; x <= rx1; x++) {
+                const dr = Math.hypot(x - sx, y - sy) / RR; if (dr > 1) continue;
+                const gl = Math.pow(1 - dr, 2) * 26 * bright; const i = (y * W + x) * 3;
+                A[i] += gl * 0.85; A[i + 1] += gl * 0.6; A[i + 2] += gl * 1.15;   // lone violet
+              }
+              // a few spin motes so it reads as a GALAXY, not a star
+              const cs = Math.cos(t * fg.rot), sn = Math.sin(t * fg.rot);
+              for (const pt of fg.pts) {
+                const gx = (sx + (pt.dx * cs - pt.dy * sn) * Z * 0.5) | 0, gy = (sy + (pt.dx * sn + pt.dy * cs) * Z * 0.5) | 0;
+                if (gx < 0 || gy < 0 || gx >= W || gy >= H) continue;
+                const bb = pt.b * 90 * bright; const i = (gy * W + gx) * 3;
+                A[i] += bb / 255 * 200; A[i + 1] += bb / 255 * 150; A[i + 2] += bb / 255 * 235;
+              }
+            }
+          }
         }
       } else if (layer.kind === 'super') {
         // ══ INSIDE A SUPERCLUSTER — the sea of galaxies. Deep space + parallax
@@ -841,6 +979,22 @@ export default function Nother() {
                   const j = (py2 * W + px2) * 3; A[j] += cr2 / 255 * bb * 0.3; A[j + 1] += cg2 / 255 * bb * 0.3; A[j + 2] += cb2 / 255 * bb * 0.3;
                 };
                 put(1, 0); put(-1, 0); put(0, 1); put(0, -1);
+              }
+            }
+            // rogue beacon (far band) — a throbbing cold cross glint that pops out
+            // of the void even at this zoom. The "what's out there?" pull.
+            if (rogueAt(sc.base, cx, cy)) {
+              const seed = mix(mix(sc.base ^ cellHash(cx, cy)) ^ 0x9e37_79b9);
+              const wx = cx * GCELL + rnd(seed, 1) * GCELL, wy = cy * GCELL + rnd(seed, 2) * GCELL;
+              const ix = ((wx - ox) * Z) | 0, iy = ((wy - oy) * Z) | 0;
+              if (ix >= 1 && iy >= 1 && ix < W - 1 && iy < H - 1) {
+                const throb = 0.5 + 0.5 * Math.sin(t * 2.6 + rnd(seed, 16) * 6.283);
+                const bb = 130 * (0.5 + throb);
+                const put = (dx: number, dy: number, k: number) => {
+                  const j = ((iy + dy) * W + (ix + dx)) * 3;
+                  A[j] += bb * k * 0.7; A[j + 1] += bb * k * 0.9; A[j + 2] += bb * k * 1.2;
+                };
+                put(0, 0, 1); put(1, 0, 0.5); put(-1, 0, 0.5); put(0, 1, 0.5); put(0, -1, 0.5);
               }
             }
           }
@@ -888,6 +1042,38 @@ export default function Nother() {
                 };
                 put(1, 0); put(-1, 0); put(0, 1); put(0, -1);
               }
+            }
+          }
+
+          // ROGUE STARS — beacons in the void between the galaxies. They MUST out-
+          // shine the field, so: throbbing cold core + long always-on cross spikes +
+          // an icy halo. Hoverable/clickable → dives straight to the rogue's system.
+          for (let cx = c0x; cx <= c1x; cx++) for (let cy = c0y; cy <= c1y; cy++) {
+            for (const s of rogueUnis(sc, cx, cy)) {
+              const sx = (s.wx - ox) * Z, sy = (s.wy - oy) * Z;
+              if (sx < -30 || sy < -30 || sx > W + 30 || sy > H + 30) continue;
+              const throb = 0.55 + 0.45 * Math.sin(t * 2.6 + s.phase);
+              const beB = (0.9 + throb);
+              if (mLo) { const d = Math.hypot(mLo.x - sx, mLo.y - sy); if (d < 12 && d < hovD) { hovD = d; hov = { kind: 'star', s }; } }
+              const RR = 16, rx0 = Math.max(0, (sx - RR) | 0), rx1 = Math.min(W - 1, (sx + RR) | 0);
+              const ry0 = Math.max(0, (sy - RR) | 0), ry1 = Math.min(H - 1, (sy + RR) | 0);
+              for (let y = ry0; y <= ry1; y++) for (let x = rx0; x <= rx1; x++) {
+                const dr = Math.hypot(x - sx, y - sy) / RR; if (dr > 1) continue;
+                const gl = Math.pow(1 - dr, 2.2) * 30 * beB; const i = (y * W + x) * 3;
+                A[i] += gl * 0.55; A[i + 1] += gl * 0.8; A[i + 2] += gl * 1.2;
+              }
+              const len = 13;
+              for (let k = 1; k <= len; k++) {
+                const fade = Math.pow(1 - k / (len + 1), 1.6) * 70 * beB;
+                const putR = (dx: number, dy: number) => {
+                  const px2 = (sx + dx) | 0, py2 = (sy + dy) | 0;
+                  if (px2 < 0 || py2 < 0 || px2 >= W || py2 >= H) return;
+                  const i = (py2 * W + px2) * 3; A[i] += fade * 0.7; A[i + 1] += fade * 0.9; A[i + 2] += fade * 1.2;
+                };
+                putR(k, 0); putR(-k, 0); putR(0, k); putR(0, -k);
+              }
+              const ci = ((sy | 0) * W + (sx | 0)) * 3; const cg = 230 * beB;
+              A[ci] += cg * 0.8; A[ci + 1] += cg * 0.95; A[ci + 2] += cg * 1.2;
             }
           }
         }
@@ -994,6 +1180,35 @@ export default function Nother() {
               continue;
             }
 
+            // ROGUE BEACON — it MUST out-shine a field already full of stars, or it
+            // vanishes. A strong throb (fast pulse the eye catches as motion) + long
+            // always-on cross spikes (no background mote has spikes) + a cold halo.
+            // The one thing that reads "anomaly, go look" against the crowd.
+            if (s.rogue) {
+              const throb = 0.55 + 0.45 * Math.sin(t * 2.6 + s.phase);   // fast, catches the eye
+              const beB = bright * (0.9 + throb);
+              // cold wide halo
+              const RR = sr * 7, rx0 = Math.max(0, (sx - RR) | 0), rx1 = Math.min(W - 1, (sx + RR) | 0);
+              const ry0 = Math.max(0, (sy - RR) | 0), ry1 = Math.min(H - 1, (sy + RR) | 0);
+              for (let y = ry0; y <= ry1; y++) for (let x = rx0; x <= rx1; x++) {
+                const dr = Math.hypot(x - sx, y - sy) / RR; if (dr > 1) continue;
+                const gl = Math.pow(1 - dr, 2.2) * 34 * beB; const i = (y * W + x) * 3;
+                A[i] += gl * 0.55; A[i + 1] += gl * 0.8; A[i + 2] += gl * 1.15;   // icy blue-white
+              }
+              // long cross spikes — ALWAYS on (not zoom-gated), the signature no
+              // background star has, so a rogue is unmistakable at any distance.
+              const len = Math.max(10, (sr * 8) | 0);
+              for (let k = 1; k <= len; k++) {
+                const fade = Math.pow(1 - k / (len + 1), 1.7) * 60 * beB;
+                const putR = (dx: number, dy: number) => {
+                  const px2 = (sx + dx) | 0, py2 = (sy + dy) | 0;
+                  if (px2 < 0 || py2 < 0 || px2 >= W || py2 >= H) return;
+                  const i = (py2 * W + px2) * 3;
+                  A[i] += fade * 0.7; A[i + 1] += fade * 0.9; A[i + 2] += fade * 1.15;
+                };
+                putR(k, 0); putR(-k, 0); putR(0, k); putR(0, -k);
+              }
+            }
             const col = hsl(s.hue, s.sat, 0.6);
             // halo — the class color lives here (red dwarfs smoulder, O-stars blaze blue)
             const HR = sr * 3.4, x0 = Math.max(0, (sx - HR) | 0), x1 = Math.min(W - 1, (sx + HR) | 0);
@@ -1399,6 +1614,7 @@ export default function Nother() {
         else if (hov.kind === 'moon') setInfoRef.current(`${hov.m.name} · moon of ${hov.p.name}\n${hov.m.facts}\n  ⌖ ${hov.p.uaddr} / ${hov.p.scaddr} / ${hov.p.gaddr} / ${hov.p.saddr} / ${hov.p.addr} / ${hov.m.addr}`);
         else if (hov.kind === 'roid') setInfoRef.current(`${hov.a.name} · belt ${hov.belt + 1} rock\n${hov.a.facts}\n  ⌖ ${hov.s.uaddr} / ${hov.s.scaddr} / ${hov.s.gaddr} / ${hov.s.addr} / b${hov.belt + 1} / ${hov.a.addr}`);
         else if (hov.s.bh) setInfoRef.current(`${hov.s.name} · black hole\n${hov.s.facts}\n  ⌖ ${hov.s.uaddr} / ${hov.s.scaddr} / ${hov.s.gaddr} / ${hov.s.addr}`);
+        else if (hov.s.rogue) setInfoRef.current(`${hov.s.name} · rogue star · adrift beyond ${hov.s.gname}\n${hov.s.facts}\n  ⌖ ${hov.s.uaddr} / ${hov.s.scaddr} / ${hov.s.gaddr} / ${hov.s.addr}`);
         else setInfoRef.current(`${hov.s.name} · star of ${hov.s.gname}\n${hov.s.facts}\n  ⌖ ${hov.s.uaddr} / ${hov.s.scaddr} / ${hov.s.gaddr} / ${hov.s.addr}`);
       }
     };
@@ -1530,8 +1746,20 @@ export default function Nother() {
       for (const sg of hash.split('.')) {
         if (sg.startsWith('sc')) { const [cx, cy, i] = sg.slice(2).split('_').map(Number); if (u && [cx, cy, i].every(Number.isFinite)) sc = scAt(u.base, u.addr, cx, cy, i, CELL_SC); }
         else if (sg.startsWith('u')) { const a = parseInt(sg.slice(1), 10); if (Number.isFinite(a)) u = uniFromAddr(a, 0, 0); }
-        else if (sg.startsWith('g')) { const [cx, cy, i] = sg.slice(1).split('_').map(Number); if (sc && [cx, cy, i].every(Number.isFinite)) g = galAt(sc.base, sc.uaddr, sc.addr, sc.name, cx, cy, i, CELL_G); }
-        else if (sg.startsWith('s')) { const [cx, cy, i] = sg.slice(1).split('_').map(Number); if (g && [cx, cy, i].every(Number.isFinite)) s = starAt(g.base, g.uaddr, g.scaddr, g.addr, g.name, cx, cy, i, CELL_ST); }
+        else if (sg.startsWith('g')) {
+          const [cx, cy, i] = sg.slice(1).split('_').map(Number);
+          // a FIELD GALAXY (i === -1) derives from the UNIVERSE base (no supercluster);
+          // a normal galaxy from its supercluster. Both need sc present for the layer.
+          if (i === -1 && u && sc && [cx, cy].every(Number.isFinite)) g = fieldGalAt(u.base, u.addr, cx, cy, CELL_SC);
+          else if (sc && [cx, cy, i].every(Number.isFinite)) g = galAt(sc.base, sc.uaddr, sc.addr, sc.name, cx, cy, i, CELL_G);
+        }
+        else if (sg.startsWith('s')) {
+          const [cx, cy, i] = sg.slice(1).split('_').map(Number);
+          // a ROGUE (i === -1) derives from the SUPERCLUSTER base (it has no galaxy);
+          // a normal star derives from its galaxy. Both need g present for the layer.
+          if (i === -1 && sc && g && [cx, cy].every(Number.isFinite)) s = rogueStarAt(sc.base, sc.uaddr, sc.addr, sc.addr, sc.name, cx, cy, CELL_G);
+          else if (g && [cx, cy, i].every(Number.isFinite)) s = starAt(g.base, g.uaddr, g.scaddr, g.addr, g.name, cx, cy, i, CELL_ST);
+        }
         else if (sg.startsWith('p')) pIdx = parseInt(sg.slice(1), 10);
         else if (sg.startsWith('m')) mIdx = parseInt(sg.slice(1), 10);
         else if (sg.startsWith('b')) bIdx = parseInt(sg.slice(1), 10);
@@ -1665,7 +1893,12 @@ export default function Nother() {
       // a giant is NEVER 'settled' (nobody builds on wind) — its hidden aerial life
       // rides the ~d density segment alone; the unsettled path spawns fauna, no city.
       const settledFlag = isGiant ? 0 : (p.hasLife ? 1 : 0);
-      setExplorable(nk ? { label: p.name, url: `terra.html#x=${nk}~${p.uaddr}~${p.gaddr}~${p.saddr}~${p.addr}~${settledFlag}~${encodeURIComponent(p.name)}${p.hasLife ? `~d${Math.round(p.density * 100)}` : ''}` } : null);
+      // STRAY? a planet of a rogue star, or of a star inside a field galaxy. Isolation
+      // is a law the surface reads: its fauna skew rare (compose-time bias). Carried as
+      // an optional ~s1 URL segment (older links / normal worlds omit it → not stray).
+      const lyr = layerRef.current;
+      const isStray = lyr.kind === 'system' && (lyr.s.rogue === true || lyr.g.cell[2] === -1);
+      setExplorable(nk ? { label: p.name, url: `terra.html#x=${nk}~${p.uaddr}~${p.gaddr}~${p.saddr}~${p.addr}~${settledFlag}~${encodeURIComponent(p.name)}${p.hasLife ? `~d${Math.round(p.density * 100)}` : ''}${isStray ? '~s1' : ''}` } : null);
       const landLine = nk
         ? (isGiant ? '  ⤓ descend to the storm shelf — thrusters hold' : '  ⤓ explore lands on its surface — an entire Atlas')
         : isGiant ? `  ⚠ storm gravity ${grav.toFixed(2)} — hover ${hoverOf(SHIP).toFixed(2)} can't hold · upgrade thrusters (⬡ ship)`

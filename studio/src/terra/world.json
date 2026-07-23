@@ -84,7 +84,7 @@
       "count": "floor(life_density * (2 + 7*clamp(wooded_frac + grassy_frac, 0, 1) + 2*rand(41)))",
       "child_stats": {
         "species":   "floor(5.99 * rand(50))",
-        "gene":      "parent.gene",
+        "gene":      "mod(parent.gene + parent.fauna_bias, 1)",
         "flyer":     "lt(mod(species*0.618 + gene, 1), clamp(1.35 - 1.55*parent.air, 0, 0.9))",
         "size":      "clamp(0.2 + 0.8*mod(species*0.317 + gene*2.3, 1) - 0.38*parent.gravity, 0.12, 1)",
         "height":    "clamp(0.25 + 0.75*mod(species*0.911 + gene*1.1, 1) - 0.42*parent.gravity, 0.1, 1)",
@@ -142,7 +142,8 @@
         "gravity":   "parent.gravity",
         "heat":      "parent.heat",
         "lush":      "parent.lush",
-        "life_density": "parent.life_density"
+        "life_density": "parent.life_density",
+        "fauna_bias":   "parent.fauna_bias"
       }
     },
 

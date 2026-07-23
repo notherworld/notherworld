@@ -14,6 +14,7 @@
 // shipped table or change a salt — that re-rolls every existing address's facts.
 
 import { h } from './hash';
+import { properName } from './lexicon';
 
 // ── CHARTER DISTRIBUTIONS — the universe's dials (PLANET_TEMPLATES.md §7).
 // The BASE universe (what every visitor sees) uses the defaults below. A charter
@@ -77,13 +78,50 @@ const BIAS = [
 
 // UNIVERSE — slightly different physical constants per address (the "randomized
 // laws" seed): gravity tilt, expansion rate, temperature, and a generation bias.
-export function universeFacts(seed: number): string {
+//
+// ── COSMIC EPOCH — age is the arrow of time, and now bg temp + life OBEY it.
+// Was: three INDEPENDENT salts (age 601 / bg temp 602 / life 606), so an "ancient"
+// universe read no colder or deader than a young one — pure flavor. Now COUPLED on
+// real physics: expansion cools the background (CMB T ∝ 1/a) and starves free energy,
+//   age↑  (and faster expansion H₀↑)  ⇒  bg temp↓  ⇒  life↓.
+// A young universe teems and glows warm; an ancient one is a cold, near-dead CELL —
+// heat death as a PLACE you visit, not an ending (see IDEAS "heat death / cosmic
+// epoch"; the multiverse view already renders universes as a "culture" of cells).
+// CONDITIONS ONLY: this rung sits ABOVE the genome, so body-plan permanence is
+// untouched by construction. `coolingN` (0 young … 1 heat-dead) is the epoch dial —
+// step 2 threads it into star/planet life-odds, step 3 fades the cell by it.
+// GUARD target: rank universes by age → bg temp monotone↓ in mean AND life↓ in mean.
+export interface UniverseLaws {
+  ageGyr: number;    // 8.2 (young) … 17.6 (ancient)
+  bgTempK: number;   // 4.1 (warm/young) … 1.9 (cold/old) — obeys age + expansion
+  lifeRate: number;  // per-million abundance; high when young, → floor at heat death
+  coolingN: number;  // 0 (young, teeming) … 1 (ancient, cold, dead): THE epoch dial
+  hubble: number;    // H₀ km/s/Mpc
+  bias: string;
+}
+export function universeLaws(seed: number): UniverseLaws {
+  const ageGyr = 8.2 + h(seed, 601) * (17.6 - 8.2);
+  const ageN = (ageGyr - 8.2) / (17.6 - 8.2);            // 0 young … 1 ancient
+  const hubble = 54 + h(seed, 604) * (88 - 54);
+  const expansionN = (hubble - 54) / (88 - 54);          // faster expansion cools sooner
+  // the epoch dial: mostly age, nudged by expansion rate (both cool the universe)
+  const coolingN = clamp01(ageN * 0.75 + expansionN * 0.25);
+  const bgTempK = 4.1 - coolingN * (4.1 - 1.9);          // monotone↓ in cooling
+  // life obeys the arrow of time; a small hashed jitter (old life salt 606) keeps
+  // same-age universes distinct without breaking the downward mean slope.
+  const lifeJitter = (h(seed, 606) - 0.5) * 0.3;         // ±0.15
+  const lifeFrac = clamp01((1 - coolingN) + lifeJitter);
+  const lifeRate = 0.1 + lifeFrac * (42.0 - 0.1);
   const bias = BIAS[Math.floor(h(seed, 610) * BIAS.length)];
+  return { ageGyr, bgTempK, lifeRate, coolingN, hubble, bias };
+}
+export function universeFacts(seed: number): string {
+  const u = universeLaws(seed);
   return [
-    `age ${f(seed, 601, 8.2, 17.6)} Gyr · bg temp ${f(seed, 602, 1.9, 4.1)} K`,
-    `G ×${f(seed, 603, 0.91, 1.09, 2)} · H₀ ${f(seed, 604, 54, 88, 0)} km/s/Mpc`,
-    `~${f(seed, 605, 90, 940, 0)}B galaxies · life ${f(seed, 606, 0.1, 42.0)}/M`,
-    `bias: ${bias}`,
+    `age ${u.ageGyr.toFixed(1)} Gyr · bg temp ${u.bgTempK.toFixed(1)} K`,
+    `G ×${f(seed, 603, 0.91, 1.09, 2)} · H₀ ${u.hubble.toFixed(0)} km/s/Mpc`,
+    `~${f(seed, 605, 90, 940, 0)}B galaxies · life ${u.lifeRate.toFixed(1)}/M`,
+    `bias: ${u.bias}`,
   ].map((l) => `  ${l}`).join('\n');
 }
 
@@ -170,6 +208,50 @@ export function starOf(seed: number): StarLaw {
   return { cls, tempK, hue, sat, r, planets, belts, life, facts };
 }
 
+// ── ROGUE STARS — real astrophysics: stars flung OUT of their galaxies by galactic
+// collisions or slingshot past a supermassive black hole, now adrift in the dark
+// between galaxies. They appear at ANY zoom below universe (supercluster and down),
+// RARE (~1% of cells), and each is a SURVIVOR with a story: ejected from a named
+// galaxy N billion years ago, now measurably far from home. Anything alive out here
+// survived an apocalypse and evolved ALONE → its fauna skew to the rare/legendary
+// tail (isolation breeds oddity). Deterministic like everything: same cell → same
+// rogue, forever. A first-discovery on a rogue world is a genuine trophy.
+export interface RogueStar extends StarLaw {
+  rogue: true; homeGalaxy: string; ejectedGyr: number; distanceLy: number; cause: string;
+}
+/** does this cell (at supercluster or below) host a rogue star? rare + deterministic. */
+export function rogueAt(base: number, cx: number, cy: number): boolean {
+  // own salt stream off the parent base + cell, so it never correlates with the
+  // cell's normal content roll. ~3.5% — scattered but genuinely spottable specks
+  // in the void between the galaxies (field/rogue stars are common in reality).
+  return h((base ^ (cx * 0x1f1f1f1f) ^ (cy * 0x27d4eb2d)) >>> 0, 940) < 0.035;
+}
+/** does this cell (at the cosmic-web / universe view) host a lone FIELD GALAXY,
+ *  adrift in a void between the supercluster filaments? Rare + deterministic —
+ *  the same "stray in the void" idea one rung up. You can dive into it (a real
+ *  galaxy with its own stars, just far from any supercluster). */
+export function fieldGalaxyAt(uBase: number, cx: number, cy: number): boolean {
+  return h((uBase ^ (cx * 0x2545f491) ^ (cy * 0x9e3779b1)) >>> 0, 945) < 0.03;
+}
+/** a rogue star: full star physics + its exile backstory. */
+export function rogueStarOf(seed: number): RogueStar {
+  const s = starOf(seed);
+  const causes = ['a galactic collision', 'a black-hole slingshot', 'a tidal disruption', 'a merger shockwave'];
+  const cause = causes[Math.floor(h(seed, 941) * causes.length) % causes.length];
+  const homeGalaxy = properName(seed, 942);
+  const ejectedGyr = +(0.4 + h(seed, 943) * 11).toFixed(1);        // 0.4–11.4 billion years ago
+  // drift speed × time → distance from home (rogue stars move ~hundreds–thousands km/s)
+  const speedKmS = 200 + h(seed, 944) * 2300;
+  const distanceLy = Math.round(speedKmS * ejectedGyr * 3.4);       // ~ly, order-of-magnitude honest
+  const facts = [
+    `ROGUE STAR · class ${s.cls} · ${s.tempK.toLocaleString('en-US')} K`,
+    `${s.planets} worlds · ${s.belts} belt${s.belts === 1 ? '' : 's'} · adrift, no galaxy`,
+    `ejected from ${homeGalaxy} ~${ejectedGyr} Gyr ago by ${cause}`,
+    `now ${distanceLy.toLocaleString('en-US')} ly from home · life: ${s.life}`,
+  ].map((l) => `  ${l}`).join('\n');
+  return { ...s, rogue: true, homeGalaxy, ejectedGyr, distanceLy, cause, facts };
+}
+
 // PLANET — the rung where the ladder meets the ground: orbit distance × the star's
 // temperature fixes an equilibrium temp, temp fixes the TYPE, and the type fixes
 // the color drawn. A star whose sheet says "7 worlds" opens to exactly 7 — the
@@ -191,7 +273,18 @@ export interface PlanetLaw {
                                   // a big planet is literally more world to explore
   cloudy: boolean;                // heavy atmosphere (charter-tiltable)
 }
-export function planetOf(seed: number, index: number, star: StarLaw, fidelity: number = SCANNER_FIDELITY): PlanetLaw {
+// `epoch` = the universe's cosmic-age dial (universeLaws().coolingN, 0 young … 1
+// heat-dead), threaded from the address ABOVE this rung. It is CONDITIONS-ONLY: it
+// decays how much life is PRESENT and how DENSE it is — a dying universe's worlds are
+// mostly barren, and what clings is sparse enough to slip below the orbital detector —
+// WITHOUT touching the structural genome (that lives on the surface, below this rung,
+// so body-plan permanence is untouched). epoch DEFAULTS TO 0 = exact identity, so every
+// caller that doesn't age (the /proofs guards, the studio) reads today's numbers
+// unchanged; only nother's dive passes a real coolingN. See IDEAS "heat death / cosmic
+// epoch" step 2. NOTE: the CONDITIONS band (temperature habitability) is deliberately
+// left epoch-free — cooling the stars themselves is a separate follow-up; today heat
+// death shows as empty favorable-looking worlds + hidden sparse survivors.
+export function planetOf(seed: number, index: number, star: StarLaw, fidelity: number = SCANNER_FIDELITY, epoch: number = 0): PlanetLaw {
   const orbit = (index + 1) * (0.55 + 0.5 * h(seed, 901));            // AU-ish
   const tempK = Math.round(star.tempK * 0.048 / Math.sqrt(orbit));    // Earth ≈ 277 K sanity
   const gas = index >= 2 && h(seed, 902) > 0.62;
@@ -250,7 +343,11 @@ export function planetOf(seed: number, index: number, star: StarLaw, fidelity: n
   // the truth is only reachable by descending — which the thruster gate (giantGravity
   // + ship hover) must first permit. Life ≠ settlement: the unsettled compose path
   // spawns fauna with no civilisation, so a living giant is wildlife in the clouds.
-  const hasLife = gas ? h(seed, 906) < 0.22 : h(seed, 906) < presenceP[conditions];
+  // COSMIC EPOCH decays presence: a heat-dead universe (epoch→1) starves life toward a
+  // floor (epochLife 1 → 0.2), so favorable-looking worlds are mostly empty and a live
+  // find in an ancient universe is a genuine trophy. epoch=0 ⇒ epochLife=1 ⇒ identity.
+  const epochLife = 1 - epoch * 0.8;
+  const hasLife = gas ? h(seed, 906) < 0.22 * epochLife : h(seed, 906) < presenceP[conditions] * epochLife;
   // magnitude: centred per band with a WIDE spread, positioned so the detection
   // threshold (0.45) cuts THROUGH the has-life distribution in every band — that's
   // what makes the camouflage real: favorable life is usually (not always) dense
@@ -261,7 +358,7 @@ export function planetOf(seed: number, index: number, star: StarLaw, fidelity: n
   const densCentre: Record<string, number> = { favorable: 0.62, possible: 0.44, unlikely: 0.30, impossible: 0.15 };
   const densCap: Record<string, number> = { favorable: 1, possible: 0.85, unlikely: 0.62, impossible: 0.42 };
   const density = hasLife
-    ? Math.min(densCap[conditions], clamp01(densCentre[conditions] + (h(seed, 907) - 0.5) * 0.55))
+    ? Math.min(densCap[conditions], clamp01((densCentre[conditions] + (h(seed, 907) - 0.5) * 0.55) * epochLife))
     : 0;
   const DETECT = 0.45;                          // orbital detection threshold
   const lifeRich = hasLife && density > 0.6;    // verdant vs microbial, magnitude-driven
