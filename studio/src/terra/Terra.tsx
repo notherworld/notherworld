@@ -511,7 +511,12 @@ export default function Terra() {
   const blitRef = useRef<(() => void) | null>(null);
   // CATCH FX — transient bursts, stored in WORLD coords so they stay pinned to the
   // spot as you pan/zoom. The draw loop expands + fades a ring at each until it dies.
-  const catchFxRef = useRef<{ wx: number; wy: number; t0: number; hue: number }[]>([]);
+  // kind: 'catch' = success ring (hue); 'miss' = a small grey spook puff.
+  const catchFxRef = useRef<{ wx: number; wy: number; t0: number; hue: number; miss?: boolean }[]>([]);
+  // SPOOKED creatures — a missed catch sends them fleeing (a dart-away impulse in
+  // world space) and raises their WARINESS so the next attempt is harder. Keyed by
+  // fauna id; the render glide adds the flee offset while active.
+  const spookRef = useRef<Map<number, { t0: number; vx: number; vy: number; wariness: number }>>(new Map());
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null);
   const suppressClickRef = useRef(false);
@@ -677,7 +682,32 @@ export default function Terra() {
       }
       if (best) {
         const c = faunaRef.current.find((f) => f.id === best!.id)!;
+        // ── CATCH ATTEMPT — no longer a guaranteed grab. p(catch) starts high and
+        // is cut by how SHY the species is and how RARE its body-plan is (steep, so a
+        // legendary genuinely fights you), and further by accumulated WARINESS from
+        // prior spooks. A MISS sends it fleeing and makes the next attempt harder.
+        // The roll is per-click (wall-clock) — this is UX, not world state, so it
+        // needn't be deterministic (and shouldn't be save-scummable).
+        const shy = c.stats.shy ?? 0.4;
+        const rt = speciesRarity(c.stats).tier;
+        const rarityPen = ({ common: 0, uncommon: 0.15, rare: 0.32, 'very rare': 0.5, legendary: 0.65 } as Record<string, number>)[rt] ?? 0;
+        const sp = spookRef.current.get(c.id);
+        const wariness = sp?.wariness ?? 0;
+        const pCatch = Math.max(0.08, 0.95 - shy * 0.35 - rarityPen - wariness * 0.2);
+        if (Math.random() > pCatch) {
+          // MISS — it bolts. A flee impulse directly away from the click point, in
+          // world space, plus a bump in wariness (caps out so a species stays catchable).
+          const away = scopeMap.toW(bx, by);
+          let fvx = c.wx1 - away.wx, fvy = c.wy1 - away.wy;
+          const mag = Math.hypot(fvx, fvy) || 1;
+          fvx /= mag; fvy /= mag;
+          spookRef.current.set(c.id, { t0: performance.now(), vx: fvx, vy: fvy, wariness: Math.min(3, wariness + 1) });
+          catchFxRef.current.push({ wx: c.wx1, wy: c.wy1, t0: performance.now(), hue: c.hue, miss: true });
+          return;
+        }
+        // SUCCESS — caught.
         w.set(best.id, 'caught', 1);
+        spookRef.current.delete(c.id);
         // catch juice — a burst pinned to where the creature was, in the critter's hue
         catchFxRef.current.push({ wx: c.wx1, wy: c.wy1, t0: performance.now(), hue: c.hue });
         const key = `${c.species}:${c.gene.toFixed(3)}`;
@@ -3413,8 +3443,18 @@ export default function Terra() {
       if (crit.length && RSC > 1.15) {
         const fGl = Math.min(1, (t - peopleT0Ref.current) / 700);
         const scale = Math.min(RSC, 6) * 0.55;
+        const FLEE = 900;   // ms a spook dart lasts
         for (const cA of crit) {
-          const sc = scopeMap.toS(cA.wx0 + (cA.wx1 - cA.wx0) * fGl, cA.wy0 + (cA.wy1 - cA.wy0) * fGl);
+          // a SPOOKED critter (missed catch) darts along its flee vector — a burst
+          // that grows fast then eases, added to its normal glide in world space.
+          let flx = 0, fly = 0;
+          const sp = spookRef.current.get(cA.id);
+          if (sp) {
+            const fage = (t - sp.t0) / FLEE;
+            if (fage >= 1) spookRef.current.delete(cA.id);
+            else { const push = Math.sin(Math.min(1, fage) * Math.PI) * 0.06; flx = sp.vx * push; fly = sp.vy * push; }
+          }
+          const sc = scopeMap.toS(cA.wx0 + (cA.wx1 - cA.wx0) * fGl + flx, cA.wy0 + (cA.wy1 - cA.wy0) * fGl + fly);
           const fx = Math.round(sc.x), fy = Math.round(sc.y);
           // room for the tallest a silhouette reaches up from the foot point
           const reach = Math.round((6 + cA.size * 6) * scale) + 2;
@@ -3452,20 +3492,21 @@ export default function Terra() {
         }
       }
 
-      // ── CATCH FX — an expanding ring + a quick flash where a creature was caught.
-      // Pinned in world space (via scopeMap) so it stays put as you pan; ~500ms life.
+      // ── CATCH FX — pinned in world space (via scopeMap) so it stays on the spot as
+      // you pan. A CATCH = an expanding hue ring + bright flash (~520ms). A MISS = a
+      // smaller, faster GREY puff (~360ms, no flash) — "it slipped away". Both read
+      // instantly as success vs. spook.
       if (catchFxRef.current.length) {
-        const LIFE = 520;
-        catchFxRef.current = catchFxRef.current.filter((fx) => t - fx.t0 < LIFE);
+        catchFxRef.current = catchFxRef.current.filter((fx) => t - fx.t0 < (fx.miss ? 360 : 520));
         for (const fxf of catchFxRef.current) {
+          const LIFE = fxf.miss ? 360 : 520;
           const age = (t - fxf.t0) / LIFE;              // 0..1
           const sc = scopeMap.toS(fxf.wx, fxf.wy);
           const ccx = Math.round(sc.x), ccy = Math.round(sc.y);
           if (ccx < -20 || ccy < -20 || ccx > GRID + 20 || ccy > GRID + 20) continue;
-          const [fr, fg, fb] = hsl(fxf.hue * 360, 70, 60);
-          const ring = 2 + age * 13;                    // radius grows
-          const a = (1 - age) * (1 - age);              // fade out (ease)
-          // ring — plot a circle of points at the current radius
+          const [fr, fg, fb] = fxf.miss ? [150, 156, 168] : hsl(fxf.hue * 360, 70, 60);
+          const ring = 2 + age * (fxf.miss ? 7 : 13);   // miss puff is smaller
+          const a = (1 - age) * (1 - age) * (fxf.miss ? 0.6 : 1);   // and fainter
           const steps = Math.max(10, Math.round(ring * 4));
           for (let s = 0; s < steps; s++) {
             const ang = (s / steps) * 6.2832;
@@ -3477,8 +3518,8 @@ export default function Terra() {
             data[k + 2] = data[k + 2] * (1 - a) + fb * a;
             data[k + 3] = 255;
           }
-          // flash — a bright core the first ~40% of life
-          if (age < 0.4) {
+          // bright flash — SUCCESS only, first ~40% of life
+          if (!fxf.miss && age < 0.4) {
             const fa = (1 - age / 0.4);
             for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
               const gx = ccx + ox, gy = ccy + oy;
