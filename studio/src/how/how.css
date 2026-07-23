@@ -1,0 +1,138 @@
+/* how — the grounded page. Quietest register on the site: this is documentation
+   with a spine, not a pitch. Dimmest sky, most whitespace, monospace receipts. */
+.how {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 24px 96px;
+}
+
+.how-hero {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 64px 0 40px;
+}
+.how-crumb {
+  font-family: var(--px-display);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  margin: 0 0 32px;
+  color: var(--text-dim);
+}
+.how-crumb a { color: var(--text-dim); text-decoration: none; }
+.how-crumb a:hover { color: var(--px-teal); }
+.how-hero h1 {
+  font-size: 30px;
+  line-height: 1.9;
+  margin: 0 0 28px;
+  text-shadow: 0 0 26px rgba(124, 92, 255, 0.4);
+}
+.how-sub { font-size: 17px; line-height: 1.8; color: var(--text); margin: 0; max-width: 620px; }
+.how-sub a { color: var(--px-teal); }
+
+.how-body { font-size: 16.5px; line-height: 1.85; color: var(--text); }
+.how-body p { margin: 0 0 20px; }
+.how-body a { color: var(--px-teal); text-decoration-color: rgba(77, 212, 200, 0.4); }
+.how-body b { color: var(--text-h); font-weight: 600; }
+.how-body code {
+  font-family: var(--px-terminal);
+  font-size: 1.08em;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  padding: 0 6px;
+  color: var(--px-teal);
+  white-space: nowrap;
+}
+
+.how-sec { margin: 0 0 72px; }
+.how-sec > h2 {
+  font-family: var(--px-display);
+  font-size: 13px;
+  line-height: 2;
+  color: var(--text-h);
+  margin: 0 0 26px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.how-plain {
+  margin: 26px 0 0;
+  padding: 16px 20px;
+  border: 1px solid rgba(240, 192, 96, 0.35);
+  border-left: 3px solid var(--px-amber);
+  background: rgba(240, 192, 96, 0.04);
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--text);
+}
+.how-plain-tag {
+  display: block;
+  font-family: var(--px-display);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--px-amber);
+  margin-bottom: 8px;
+}
+
+.how-table-wrap { overflow-x: auto; margin: 0 0 22px; }
+.how-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+.how-table th {
+  font-family: var(--px-display);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--text-dim);
+  padding: 10px 14px;
+  border-bottom: 2px solid var(--border);
+}
+.how-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.how-table td:first-child { font-family: var(--px-terminal); font-size: 17px; color: var(--text-h); white-space: nowrap; }
+
+.how-verify { border: 2px solid rgba(124, 92, 255, 0.4); padding: 28px 26px; }
+.how-cmds ul { margin: 0 0 20px; padding-left: 22px; }
+.how-cmds li { margin-bottom: 8px; }
+.how-cmds pre {
+  font-family: var(--px-terminal);
+  font-size: 17px;
+  line-height: 1.7;
+  background: var(--px-ink);
+  border: 1px solid var(--border);
+  padding: 16px 18px;
+  overflow-x: auto;
+  color: #bfeeda;
+  margin: 0 0 22px;
+}
+
+.how-llm {
+  margin-top: 28px;
+  padding: 20px 22px;
+  border: 1px dashed rgba(77, 212, 200, 0.45);
+  background: rgba(77, 212, 200, 0.03);
+  font-size: 15px;
+  line-height: 1.75;
+}
+.how-llm-tag { font-size: 10px; color: var(--px-teal); margin: 0 0 14px; }
+.how-llm p:last-child { margin: 0; }
+
+.how-foot { border-top: 1px solid var(--border); padding-top: 48px; text-align: center; }
+.how-foot-line {
+  font-family: var(--px-terminal);
+  font-size: 24px;
+  color: var(--text-h);
+  margin: 0 0 30px;
+}
+.how-cta { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin: 0; }
+
+@media (max-width: 560px) {
+  .how-hero h1 { font-size: 19px; }
+  .how-sec > h2 { font-size: 11px; }
+  .how-body { font-size: 15.5px; }
+}

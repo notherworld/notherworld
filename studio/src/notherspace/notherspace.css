@@ -1,0 +1,128 @@
+/* notherspace facts page — claim/prove rhythm. Same solemn register as about,
+   but each section is a headline-sized claim with its verdict line under it. */
+.ns {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 24px 96px;
+}
+
+.ns-hero {
+  min-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  align-items: center;
+  padding: 64px 0 48px;
+}
+.ns-crumb {
+  font-family: var(--px-display);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  margin: 0 0 36px;
+  color: var(--text-dim);
+}
+.ns-crumb a { color: var(--text-dim); text-decoration: none; }
+.ns-crumb a:hover { color: var(--px-teal); }
+.ns-hero h1 {
+  font-size: 34px;
+  line-height: 2;
+  margin: 0 0 32px;
+  text-shadow: 0 0 30px rgba(124, 92, 255, 0.55), 0 0 90px rgba(124, 92, 255, 0.3);
+  animation: ns-glow 7s ease-in-out infinite;
+}
+@keyframes ns-glow {
+  0%, 100% { text-shadow: 0 0 30px rgba(124,92,255,0.55), 0 0 90px rgba(124,92,255,0.3); }
+  50% { text-shadow: 0 0 44px rgba(124,92,255,0.75), 0 0 130px rgba(77,212,200,0.3); }
+}
+.ns-sub {
+  font-size: 17px;
+  line-height: 1.8;
+  color: var(--text);
+  max-width: 600px;
+  margin: 0 0 32px;
+}
+.ns-sub b { color: var(--text-h); }
+.ns-cta { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin: 0; }
+
+.ns-body { font-size: 17px; line-height: 1.85; color: var(--text); }
+.ns-body a { color: var(--px-teal); text-decoration-color: rgba(77, 212, 200, 0.4); }
+.ns-body b { color: var(--text-h); font-weight: 600; }
+
+.ns-claim { margin: 0 0 84px; }
+.ns-claim > h2, .ns-how > h2 {
+  font-family: var(--px-display);
+  font-size: 19px;
+  line-height: 2;
+  color: var(--text-h);
+  margin: 0 0 26px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+  text-shadow: 0 0 18px rgba(124, 92, 255, 0.35);
+}
+.ns-claim-body p { margin: 0 0 22px; }
+
+.ns-prove { margin-top: 4px; }
+.ns-prove-btn { font-size: 11px; }
+.ns-verdict {
+  margin: 18px 0 0;
+  padding: 16px 18px;
+  font-family: var(--px-terminal);
+  font-size: 19px;
+  line-height: 1.6;
+  border: 1px solid var(--border);
+}
+.ns-verdict.pass { border-color: rgba(62, 207, 142, 0.55); color: #bfeeda; background: rgba(62, 207, 142, 0.06); }
+.ns-verdict.fail { border-color: rgba(255, 92, 114, 0.55); color: #ffc4cd; background: rgba(255, 92, 114, 0.06); }
+.ns-verdict-flag { font-family: var(--px-display); font-size: 10px; margin-right: 8px; }
+.ns-verdict.pass .ns-verdict-flag { color: var(--px-green); }
+.ns-verdict.fail .ns-verdict-flag { color: var(--px-red); }
+
+.ns-roadmap {
+  margin: 18px 0 0;
+  padding: 16px 18px;
+  border: 1px dashed rgba(240, 192, 96, 0.45);
+  color: var(--text);
+  font-size: 14.5px;
+  line-height: 1.7;
+}
+.ns-roadmap .px-chip { margin-right: 10px; }
+
+.ns-how { margin: 0 0 72px; }
+
+.ns-alive { margin: 0 0 84px; }
+.ns-alive > h2 {
+  font-family: var(--px-display);
+  font-size: 19px;
+  line-height: 2;
+  color: var(--text-h);
+  margin: 0 0 26px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+  text-shadow: 0 0 18px rgba(77, 212, 200, 0.35);
+}
+.ns-alive-lede { margin: 0 0 24px; }
+.ns-alive-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; }
+.ns-alive-list li {
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--px-teal);
+  font-size: 15px;
+  line-height: 1.7;
+  background: rgba(77, 212, 200, 0.03);
+}
+.ns-alive-list b { display: block; color: var(--text-h); margin-bottom: 2px; }
+
+.ns-foot { border-top: 1px solid var(--border); padding-top: 48px; text-align: center; }
+.ns-foot-line {
+  font-family: var(--px-terminal);
+  font-size: 24px;
+  color: var(--text-h);
+  margin: 0 0 30px;
+}
+
+@media (max-width: 560px) {
+  .ns-hero h1 { font-size: 20px; }
+  .ns-claim > h2, .ns-how > h2 { font-size: 13px; }
+  .ns-body { font-size: 16px; }
+}

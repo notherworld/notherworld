@@ -1,0 +1,121 @@
+/* pixel.css — the shared pixel-vibe design layer for the public-facing pages
+   (home + about). Inner tools keep the console look; these pages are the face.
+   Rules of the look:
+   - hard edges: no border-radius, no blurred shadows. Shadows are 3-4px hard offsets.
+   - a display pixel font for headings/chips only; body stays readable sans.
+   - stepped "notched" corners on cards via clip-path (the 8-bit corner cut).
+   - one accent per meaning: violet = engine, teal = proof, green = play, amber = lab. */
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+
+:root {
+  --px-display: 'Press Start 2P', var(--mono);
+  --px-terminal: 'VT323', var(--mono);
+  --px-violet: #7c5cff;
+  --px-teal: #4dd4c8;
+  --px-green: #3ecf8e;
+  --px-amber: #f0c060;
+  --px-red: #ff5c72;
+  --px-ink: #0a0b10;
+}
+
+/* the 8-bit corner cut: cards, buttons, chips all share it */
+.px-cut {
+  clip-path: polygon(
+    0 6px, 6px 6px, 6px 0,
+    calc(100% - 6px) 0, calc(100% - 6px) 6px, 100% 6px,
+    100% calc(100% - 6px), calc(100% - 6px) calc(100% - 6px), calc(100% - 6px) 100%,
+    6px 100%, 6px calc(100% - 6px), 0 calc(100% - 6px)
+  );
+}
+
+.px-h {
+  font-family: var(--px-display);
+  color: var(--text-h);
+  line-height: 1.7;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+}
+
+.px-chip {
+  display: inline-block;
+  font-family: var(--px-display);
+  font-size: 8px;
+  padding: 5px 8px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--px-ink);
+  white-space: nowrap;
+}
+.px-chip-demo { background: var(--px-green); }
+.px-chip-experiment { background: var(--px-amber); }
+.px-chip-tool { background: var(--px-teal); }
+.px-chip-wip { background: var(--px-red); }
+.px-chip-thesis { background: var(--px-violet); color: #fff; }
+
+/* scanlines — subtle CRT texture over hero regions only (full-page is nauseating) */
+.px-scan {
+  position: relative;
+}
+.px-scan::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 2px,
+    rgba(0, 0, 0, 0.14) 2px 3px
+  );
+}
+
+.px-card {
+  display: block;
+  position: relative;
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 2px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.08s steps(2), border-color 0.08s;
+}
+.px-card:hover {
+  border-color: var(--px-violet);
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 rgba(124, 92, 255, 0.55);
+}
+
+.px-btn {
+  display: inline-block;
+  font-family: var(--px-display);
+  font-size: 10px;
+  padding: 12px 16px 10px;
+  background: var(--px-violet);
+  color: #fff;
+  border: 2px solid #fff2;
+  text-decoration: none;
+  text-transform: lowercase;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5);
+  transition: transform 0.08s steps(2), box-shadow 0.08s steps(2);
+}
+.px-btn:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.5); }
+.px-btn:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5); }
+.px-btn.ghost { background: transparent; color: var(--text-h); border-color: var(--border); }
+.px-btn.ghost:hover { border-color: var(--px-teal); color: var(--px-teal); }
+
+/* blinking terminal cursor for taglines */
+.px-cursor::after {
+  content: '▌';
+  color: var(--px-teal);
+  animation: px-blink 1.1s steps(1) infinite;
+}
+@keyframes px-blink { 50% { opacity: 0; } }
+
+.px-kbd {
+  font-family: var(--px-terminal);
+  font-size: 1.05em;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  padding: 0 6px;
+  color: var(--px-teal);
+}
