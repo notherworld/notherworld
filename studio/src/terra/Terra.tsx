@@ -99,8 +99,8 @@ const NOSTAR = ARRIVAL !== null && ARRIVAL.noStar;
 const ROGUE_OASES: { wx: number; wy: number; r: number }[] = (() => {
   if (!NOSTAR || !ARRIVAL) return [];
   const s = ARRIVAL.seed; const rnd = (k: number) => { const x = Math.sin(s * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); };
-  const n = 3 + Math.floor(rnd(0) * 3);
-  return Array.from({ length: n }, (_, i) => ({ wx: 0.15 + rnd(i * 3 + 1) * 0.7, wy: 0.15 + rnd(i * 3 + 2) * 0.7, r: 0.5 + rnd(i * 3 + 3) * 0.6 }));
+  const n = 6 + Math.floor(rnd(0) * 4);   // 6-9 vents — always warmth in reach
+  return Array.from({ length: n }, (_, i) => ({ wx: 0.12 + rnd(i * 3 + 1) * 0.76, wy: 0.12 + rnd(i * 3 + 2) * 0.76, r: 0.6 + rnd(i * 3 + 3) * 0.7 }));
 })();
 
 // DAY/NIGHT GRADE — a full-screen multiply tint driven by the sim's `hour` (the SAME
@@ -3628,20 +3628,25 @@ export default function Terra() {
       }
 
       // ── HEAT-GLOW OASES — a rogue planet's only warmth: geothermal vents / auroras.
-      // A few deterministic warm spots (world-pinned) glow amber; drawn BEFORE the desat
-      // pass so they survive it as colour islands in the grey — the one place cone cells
-      // fire, and (thematically) where the sparse life clusters. The pulse is a slow throb.
+      // Placed directly in the BAKE BUFFER (GRID space) so they're always on-screen,
+      // and snapped onto LAND (not sea). Drawn BEFORE the desat pass so they survive
+      // as colour islands in the grey — the one place cone cells fire, and where the
+      // sparse life clusters. Bigger + more of them so a landed player always finds warmth.
       if (NOSTAR) {
         for (let i = 0; i < ROGUE_OASES.length; i++) {
           const o = ROGUE_OASES[i];
-          const sc = scopeMap.toS(o.wx, o.wy);
-          const ox2 = Math.round(sc.x), oy2 = Math.round(sc.y);
+          let ox2 = Math.round(o.wx * GRID), oy2 = Math.round(o.wy * GRID);
+          if (isWater[oy2 * GRID + ox2]) {                          // nudge a vent off the sea onto land
+            let best = -1, bd = 1e9;
+            for (let s = 0; s < 40; s++) { const a = s * 0.9, rr = 4 + s * 2; const nx = ox2 + Math.round(Math.cos(a) * rr), ny = oy2 + Math.round(Math.sin(a) * rr); if (nx < 5 || ny < 5 || nx >= GRID - 5 || ny >= GRID - 5) continue; if (!isWater[ny * GRID + nx]) { const d = rr; if (d < bd) { bd = d; best = ny * GRID + nx; } } }
+            if (best >= 0) { ox2 = best % GRID; oy2 = (best / GRID) | 0; }
+          }
           const pulse = 0.7 + 0.3 * Math.sin(t * 0.0016 + i * 2.1);
-          const R = Math.round((10 + o.r * 22) * Math.min(RSC, 6) * 0.5);
+          const R = Math.round((26 + o.r * 34) * (0.5 + Math.min(RSC, 6) * 0.12));   // bigger, less zoom-shrink
           for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
             const gx = ox2 + dx, gy = oy2 + dy; if (gx < 0 || gy < 0 || gx >= GRID || gy >= GRID) continue;
             const f = Math.hypot(dx, dy) / R; if (f > 1) continue;
-            const gl = Math.pow(1 - f, 2.2) * 150 * pulse; const k = (gy * GRID + gx) * 4;
+            const gl = Math.pow(1 - f, 2.0) * 200 * pulse; const k = (gy * GRID + gx) * 4;
             data[k] = Math.min(255, data[k] + gl);                 // amber vent glow
             data[k + 1] = Math.min(255, data[k + 1] + gl * 0.5);
             data[k + 2] = Math.min(255, data[k + 2] + gl * 0.15);
