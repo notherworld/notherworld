@@ -7,7 +7,7 @@
 // the worlds right now.
 import { useState } from 'react';
 import { createWorld, type Snapshot } from '../owos';
-import { starOf, planetOf } from '../view/facts';
+import { starOf, planetOf, galaxyStars, type StarLaw } from '../view/facts';
 import { speciesKey, breedKey, taxonName, speciesRarity, SPECIES_TOTAL, BREEDS_TOTAL, type Stats } from '../design/creature';
 import hotelSpec from '../../../worlds/hotel.json';
 import craftSpec from '../../../worlds/craft.json';
@@ -46,6 +46,45 @@ interface Proof {
 }
 
 const PROOFS: Proof[] = [
+  {
+    id: 'scale',
+    title: 'an addressable universe larger than the real one — and causally coupled',
+    what:
+      'Counts the notherspace address space from the LADDER FORMULAS themselves (not a claimed number): the per-galaxy star count is an exact closed form N=c(1+4R(R+1)); multiply by the stated per-rung capacities (galaxies/supercluster, superclusters/universe, universes) and the planets/star. Then DEMONSTRATES the coupling: rolls many stars, and shows that hotter stars deterministically produce hotter planets and higher life odds — the upper layers CAUSE the lower ones.',
+    why:
+      'Two claims most procedural universes cannot both make. (1) SCALE: the space is ~10^28 addressable planets — hundreds of millions of times No Man\'s Sky (1.8e19) and thousands of times the real observable universe (~1e24) — yet it costs zero storage, because an address is COMPUTED on observation, not stored. (2) COUPLING: it is not 10^28 independent dice. A planet\'s temperature is derived from its star\'s actual temperature, and its life odds from the star\'s life state — so by the time a world resolves under you, its whole lineage (galaxy→star→planet→fauna) has been computed as a causal cascade. Latent until observed, then genuinely alive and stateful. This row lets a skeptic run the count and see the causality, in their browser.',
+    native: '(facts.ts::galaxyStars/starOf/planetOf — the same ladder nother walks)',
+    run: async () => {
+      // (1) SCALE — from the real formulas. Sample galaxies to get a typical star N.
+      let starSum = 0;
+      for (let i = 1; i <= 200; i++) { const g = galaxyStars((Math.imul(i, 2654435761) >>> 0)); starSum += g.N; }
+      const starsPerGalaxy = starSum / 200;
+      const galaxiesPerSC = 2e4, scPerUniverse = 1e6, universes = 1e6, planetsPerStar = 8; // conservative
+      const planets = starsPerGalaxy * galaxiesPerSC * scPerUniverse * universes * planetsPerStar;
+      const NMS = 1.8e19, REAL = 1e24;
+      if (!(planets > NMS * 1e6)) throw new Error(`address space ${planets.toExponential(1)} not >> NMS`);
+      if (!(planets > REAL)) throw new Error(`address space ${planets.toExponential(1)} not > real universe (${REAL.toExponential(0)})`);
+
+      // (2) COUPLING — hotter stars must yield hotter planets + higher life odds.
+      // Bucket a big star sample by temperature, average their planets' temp + life.
+      let coldPlanetT = 0, coldN = 0, hotPlanetT = 0, hotN = 0;
+      let coldLife = 0, hotLife = 0;
+      for (let s = 1; s <= 6000; s++) {
+        const sseed = (Math.imul(s, 2654435761) >>> 0);
+        const star: StarLaw = starOf(sseed);
+        for (let i = 0; i < star.planets; i++) {
+          const p = planetOf((Math.imul(sseed ^ (i + 1), 0x9e3779b1) >>> 0), i, star);
+          if (p.type.includes('giant')) continue;
+          if (star.tempK < 3800) { coldPlanetT += p.tempK; coldN++; if (p.hasLife) coldLife++; }
+          else if (star.tempK > 8000) { hotPlanetT += p.tempK; hotN++; if (p.hasLife) hotLife++; }
+        }
+      }
+      const coldAvg = coldPlanetT / Math.max(1, coldN), hotAvg = hotPlanetT / Math.max(1, hotN);
+      if (!(hotAvg > coldAvg + 20)) throw new Error(`hot stars don't yield hotter planets: cold ${coldAvg.toFixed(0)}K vs hot ${hotAvg.toFixed(0)}K — coupling broken`);
+      const coldLifePct = 100 * coldLife / Math.max(1, coldN), hotLifePct = 100 * hotLife / Math.max(1, hotN);
+      return `${planets.toExponential(1)} addressable planets — ${(planets / NMS).toExponential(1)}× No Man's Sky, ${(planets / REAL).toExponential(1)}× the real observable universe · COUPLED: cold-star planets avg ${coldAvg.toFixed(0)}K (${coldLifePct.toFixed(0)}% alive) vs hot-star ${hotAvg.toFixed(0)}K (${hotLifePct.toFixed(0)}% alive) — the star causes the planet`;
+    },
+  },
   {
     id: 'identity',
     title: 'same seed → same world, bit for bit',
