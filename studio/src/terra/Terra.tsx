@@ -42,13 +42,13 @@ import './terra.css';
 // (galaxy/system/body variance included). No hash → plain Veranholm, unchanged.
 // Uninhabited templates are forced 'settled' until the geology-only mode lands.
 import { templeFor, composeSpecFor, bodyLaws, type SurfaceTemplate, type BodyLaws } from '../temple/templates';
-const ARRIVAL: { tpl: SurfaceTemplate; seed: number; laws: BodyLaws; settled: boolean; density: number; stray: boolean; name: string; note: string } | null = (() => {
-  // …~<settled 0|1>~<name>[~d<density×100>][~s1]  — d = life MAGNITUDE (fauna count);
-  // s1 = STRAY (a rogue star / field-galaxy world — isolation makes its fauna rarer).
-  // Both are OPTIONAL trailing segments (older links / normal worlds omit them).
-  const m = location.hash.match(/^#x=([^~]+)~(-?\d+)~(-?\d+)~(-?\d+)~(-?\d+)~([01])~([^~]*)(?:~d(\d+))?(?:~s(1))?$/);
+const ARRIVAL: { tpl: SurfaceTemplate; seed: number; laws: BodyLaws; settled: boolean; density: number; stray: boolean; noStar: boolean; name: string; note: string } | null = (() => {
+  // …~<settled 0|1>~<name>[~d<density×100>][~s1][~n1]  — d = life MAGNITUDE (fauna count);
+  // s1 = STRAY (isolation → rarer fauna); n1 = NOSTAR (rogue planet: permanent night +
+  // grayscale). All OPTIONAL trailing segments (older links / normal worlds omit them).
+  const m = location.hash.match(/^#x=([^~]+)~(-?\d+)~(-?\d+)~(-?\d+)~(-?\d+)~([01])~([^~]*)(?:~d(\d+))?(?:~s(1))?(?:~n(1))?$/);
   if (!m) return null;
-  const [, nk, u, g, s, b, lf, nm, dens, stray] = m;
+  const [, nk, u, g, s, b, lf, nm, dens, stray, noStar] = m;
   const r = templeFor({ u: +u, g: +g, s: +s, b: +b }, nk);
   const seed = Math.abs(((+b | 0) ^ ((+u | 0) * 31)) % 999983) || 7;
   return {
@@ -58,6 +58,7 @@ const ARRIVAL: { tpl: SurfaceTemplate; seed: number; laws: BodyLaws; settled: bo
     settled: lf === '1',               // life fact → whether anyone ever built here
     density: dens ? Math.min(1, +dens / 100) : 0,   // life abundance (0 if link omits it)
     stray: stray === '1',              // a rogue/field world — its fauna skew rare
+    noStar: noStar === '1',            // a ROGUE PLANET — sunless: permanent night + grayscale
     name: decodeURIComponent(nm), note: r.note,
   };
 })();
@@ -87,6 +88,20 @@ const VEG = ARRIVAL
   : 1;
 // no one has ever NAMED an uninhabited place — sectors and zones, not Kingsyard
 const WILD = ARRIVAL !== null && !ARRIVAL.settled;
+// NOSTAR — a ROGUE PLANET: no host sun. The surface lives in PERMANENT NIGHT (the
+// hour clock never lights it) and renders toward GRAYSCALE — human rod cells can't
+// perceive colour in starlight, so the world desaturates. The one exception is
+// warmth-glow (geothermal/aurora) where life clusters — colour in the dark.
+const NOSTAR = ARRIVAL !== null && ARRIVAL.noStar;
+// HEAT-GLOW OASES — a rogue planet's geothermal/aurora warm spots, deterministic from
+// its seed (world coords in [0.15,0.85] so they sit inland). 3-5 of them: the only
+// warmth + colour on a sunless world, and where the sparse life gathers.
+const ROGUE_OASES: { wx: number; wy: number; r: number }[] = (() => {
+  if (!NOSTAR || !ARRIVAL) return [];
+  const s = ARRIVAL.seed; const rnd = (k: number) => { const x = Math.sin(s * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); };
+  const n = 3 + Math.floor(rnd(0) * 3);
+  return Array.from({ length: n }, (_, i) => ({ wx: 0.15 + rnd(i * 3 + 1) * 0.7, wy: 0.15 + rnd(i * 3 + 2) * 0.7, r: 0.5 + rnd(i * 3 + 3) * 0.6 }));
+})();
 
 // DAY/NIGHT GRADE — a full-screen multiply tint driven by the sim's `hour` (the SAME
 // clock the people read for their schedules — one truth). Midday is near-white (no
@@ -148,7 +163,8 @@ export default function Terra() {
         // field chain, and its LIFE fact decides whether settlements exist at
         // all (no life → no districts, no roads, no bridges — nobody built them)
         const spec = ARRIVAL
-          ? composeSpecFor(ARRIVAL.tpl, sd, ARRIVAL.laws, ARRIVAL.settled, ARRIVAL.density, ARRIVAL.stray)
+          // a rogue planet IS a stray (the loneliest body) → its fauna get the rare bias too.
+          ? composeSpecFor(ARRIVAL.tpl, sd, ARRIVAL.laws, ARRIVAL.settled, ARRIVAL.density, ARRIVAL.stray || ARRIVAL.noStar)
           : { ...(worldSpec as object), rng_seed: sd };
         const t0 = performance.now();
         const w = await createWorld(JSON.stringify(spec));
@@ -357,7 +373,8 @@ export default function Terra() {
       // day/night grade — read the sim's clock and tint the whole view (set the layer's
       // colour directly; CSS eases it, so no per-beat React re-render).
       const cityE = s.entities.find((e) => e.kind === 'city');
-      if (cityE && gradeElRef.current) gradeElRef.current.style.backgroundColor = hourGrade(cityE.stats.hour ?? 12);
+      // a ROGUE PLANET has no sun → the grade is locked to deep starlit night, always.
+      if (gradeElRef.current) gradeElRef.current.style.backgroundColor = NOSTAR ? 'rgba(4,6,16,0.82)' : hourGrade(cityE?.stats.hour ?? 12);
     }, 700);
     return () => clearInterval(iv);
   }, [seed]);
@@ -3607,6 +3624,48 @@ export default function Terra() {
               data[k + 3] = 255;
             }
           }
+        }
+      }
+
+      // ── HEAT-GLOW OASES — a rogue planet's only warmth: geothermal vents / auroras.
+      // A few deterministic warm spots (world-pinned) glow amber; drawn BEFORE the desat
+      // pass so they survive it as colour islands in the grey — the one place cone cells
+      // fire, and (thematically) where the sparse life clusters. The pulse is a slow throb.
+      if (NOSTAR) {
+        for (let i = 0; i < ROGUE_OASES.length; i++) {
+          const o = ROGUE_OASES[i];
+          const sc = scopeMap.toS(o.wx, o.wy);
+          const ox2 = Math.round(sc.x), oy2 = Math.round(sc.y);
+          const pulse = 0.7 + 0.3 * Math.sin(t * 0.0016 + i * 2.1);
+          const R = Math.round((10 + o.r * 22) * Math.min(RSC, 6) * 0.5);
+          for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+            const gx = ox2 + dx, gy = oy2 + dy; if (gx < 0 || gy < 0 || gx >= GRID || gy >= GRID) continue;
+            const f = Math.hypot(dx, dy) / R; if (f > 1) continue;
+            const gl = Math.pow(1 - f, 2.2) * 150 * pulse; const k = (gy * GRID + gx) * 4;
+            data[k] = Math.min(255, data[k] + gl);                 // amber vent glow
+            data[k + 1] = Math.min(255, data[k + 1] + gl * 0.5);
+            data[k + 2] = Math.min(255, data[k + 2] + gl * 0.15);
+          }
+        }
+      }
+
+      // ── ROGUE-PLANET DESATURATION (the physics flex): on a sunless world, the only
+      // light is starlight, and human ROD CELLS can't perceive colour that dim — so the
+      // whole surface renders toward GRAYSCALE, exactly as your eyes would see it. Pull
+      // every pixel toward its luma. THE EXCEPTION: warmth-glow (geothermal vents /
+      // aurora) is bright + warm enough that cone cells fire — so warm, bright pixels
+      // KEEP their colour, a lone splash of hue in the dark where life clusters.
+      if (NOSTAR) {
+        for (let k = 0; k < data.length; k += 4) {
+          const r = data[k], g = data[k + 1], b = data[k + 2];
+          const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+          // warmth-glow protection: a warm (r>g,b), reasonably bright pixel keeps colour
+          const warm = (r - Math.max(g, b)) / 255;                 // >0 = reddish/orange
+          const glow = clamp01(warm * 3) * clamp01((luma - 70) / 120);   // warm AND bright
+          const desat = 0.92 * (1 - glow);                         // near-total, minus glow
+          data[k] = r + (luma - r) * desat;
+          data[k + 1] = g + (luma - g) * desat;
+          data[k + 2] = b + (luma - b) * desat;
         }
       }
 

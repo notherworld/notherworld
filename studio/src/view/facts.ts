@@ -272,6 +272,11 @@ export interface PlanetLaw {
   sizeKm: number; grid: number;   // SIZE IS THE LAW: surface = grid×grid regions —
                                   // a big planet is literally more world to explore
   cloudy: boolean;                // heavy atmosphere (charter-tiltable)
+  noStar: boolean;               // ROGUE PLANET — ejected/captured, no host sun. Its
+                                  // surface lives in permanent night lit only by
+                                  // starlight → the world renders toward GRAYSCALE
+                                  // (rod-cell colour loss), warmth-glow oases the one
+                                  // exception. A rare wanderer that can turn up anywhere.
 }
 // `epoch` = the universe's cosmic-age dial (universeLaws().coolingN, 0 young … 1
 // heat-dead), threaded from the address ABOVE this rung. It is CONDITIONS-ONLY: it
@@ -395,14 +400,20 @@ export function planetOf(seed: number, index: number, star: StarLaw, fidelity: n
   // malfunctioning false-positive world reads "living" AND renders green (the lie is
   // seamless, discovered only on landing), and a false-negative living world hides
   // as a plain rock. Any divergence here would leak the truth from orbit.
-  const type = gas ? (tempK > 150 ? 'gas giant' : 'ice giant')
+  // ROGUE PLANET — a rare (~2.5%) ejected/captured wanderer with NO host sun. It
+  // overrides a normal solid world: frigid (only geothermal warmth, ~50-95 K) and
+  // its type is 'rogue world'. Gas giants can't be rogue here (no walkable surface).
+  const noStar = !gas && h(seed, 950) < 0.025;
+  const rogueTempK = 50 + Math.round(h(seed, 951) * 45);              // sunless: near-absolute-cold
+  const type = noStar ? 'rogue world'
+    : gas ? (tempK > 150 ? 'gas giant' : 'ice giant')
     : tempK > 600 ? 'lava world' : tempK > 330 ? 'desert world'
     : habitable ? (reported ? 'living world' : 'rocky world')
     : tempK > 150 ? 'tundra world' : 'ice world';
   const LOOK: Record<string, [number, number]> = {                    // hue, sat — type IS the color
     'lava world': [12, 0.85], 'desert world': [35, 0.6], 'rocky world': [28, 0.3],
     'living world': [140, 0.55], 'tundra world': [190, 0.35], 'ice world': [188, 0.2],
-    'gas giant': [38, 0.5], 'ice giant': [210, 0.55],
+    'gas giant': [38, 0.5], 'ice giant': [210, 0.55], 'rogue world': [230, 0.12],  // cold, near-colourless
   };
   const [hue, sat] = LOOK[type];
   const r = gas ? 3.6 + 2.2 * h(seed, 903) : 1.5 + 1.3 * h(seed, 903);
@@ -412,13 +423,19 @@ export function planetOf(seed: number, index: number, star: StarLaw, fidelity: n
   // radius rolls, and the surface tile-grid follows. Gas giants have no surface.
   const sizeKm = Math.round(gas ? 18000 + h(seed, 908) * 100000 : 1800 + h(seed, 908) * 11000);
   const grid = gas ? 0 : Math.max(4, Math.round(Math.sqrt(sizeKm) / 6));
-  const facts = [
+  const shownTemp = noStar ? rogueTempK : tempK;
+  const facts = noStar ? [
+    `ROGUE WORLD · ${shownTemp} K · sunless`,
+    `ejected — no host star · lit only by starlight`,
+    `surface ${grid}×${grid} regions · ${sizeKm.toLocaleString('en-US')} km`,
+    `life: ${life}`,
+  ].map((l) => `  ${l}`).join('\n') : [
     `${type} · ${tempK} K${cloudy ? ' · heavy atmosphere' : ''}`,
     `${orbit.toFixed(1)} AU · ${moons} moon${moons === 1 ? '' : 's'}${rings ? ' · rings' : ''}`,
     gas ? `no surface — ${sizeKm.toLocaleString('en-US')} km of storm` : `surface ${grid}×${grid} regions · ${sizeKm.toLocaleString('en-US')} km`,
     `life: ${life}`,
   ].map((l) => `  ${l}`).join('\n');
-  return { type, hue, sat, r, orbit, tempK, moons, rings, life, hasLife, density, lifeRich, facts, sizeKm, grid, cloudy };
+  return { type, hue, sat, r, orbit, tempK: shownTemp, moons, rings, life, hasLife, density, lifeRich, facts, sizeKm, grid, cloudy, noStar };
 }
 
 // SMALL BODIES (asteroids, moons) — bare rock, "likely impossible" for life. But

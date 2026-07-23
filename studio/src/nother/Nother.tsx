@@ -273,7 +273,7 @@ interface Roid {
 interface Belt { r: number; rocks: Roid[] }
 interface Planet {
   addr: number; idx: number; uaddr: number; scaddr: number; gaddr: number; saddr: number; sname: string;
-  name: string; facts: string; type: string; life: string; hasLife: boolean; density: number;
+  name: string; facts: string; type: string; life: string; hasLife: boolean; density: number; noStar: boolean;
   orbit: number; phase: number; speed: number; r: number; hue: number; sat: number;
   moons: number; rings: boolean; moonsD: Moon[];
 }
@@ -302,7 +302,7 @@ function planetsFor(s: Star): Planet[] {
     });
     return {
       addr, idx: i, uaddr: s.uaddr, scaddr: s.scaddr, gaddr: s.gaddr, saddr: s.addr, sname: s.name,
-      name: properName(pseed, 12), facts: law.facts, type: law.type, life: law.life, hasLife: law.hasLife, density: law.density,
+      name: properName(pseed, 12), facts: law.facts, type: law.type, life: law.life, hasLife: law.hasLife, density: law.density, noStar: law.noStar,
       orbit: 58 + i * 46 + 18 * rnd(pseed, 921),     // strictly widening rings
       phase: 6.283 * rnd(pseed, 922), speed: 0.55 / Math.pow(i + 1, 1.4),
       r: law.r * 2.2, hue: law.hue, sat: law.sat, moons: law.moons, rings: law.rings, moonsD,
@@ -1888,7 +1888,7 @@ export default function Nother() {
       const canHover = !isGiant || hoverOf(SHIP) >= grav;
       const nk = p.type === 'lava world' ? 'lava'
         : p.type === 'living world' || p.type === 'ocean world' ? 'verdant'
-        : p.type === 'ice world' || p.type === 'tundra world' ? 'ice'
+        : p.type === 'ice world' || p.type === 'tundra world' || p.type === 'rogue world' ? 'ice'   // rogue = frigid terrain
         : isGiant ? (canHover ? 'gas' : null) : 'barren';
       // a giant is NEVER 'settled' (nobody builds on wind) — its hidden aerial life
       // rides the ~d density segment alone; the unsettled path spawns fauna, no city.
@@ -1898,7 +1898,9 @@ export default function Nother() {
       // an optional ~s1 URL segment (older links / normal worlds omit it → not stray).
       const lyr = layerRef.current;
       const isStray = lyr.kind === 'system' && (lyr.s.rogue === true || lyr.g.cell[2] === -1);
-      setExplorable(nk ? { label: p.name, url: `terra.html#x=${nk}~${p.uaddr}~${p.gaddr}~${p.saddr}~${p.addr}~${settledFlag}~${encodeURIComponent(p.name)}${p.hasLife ? `~d${Math.round(p.density * 100)}` : ''}${isStray ? '~s1' : ''}` } : null);
+      // NOSTAR (~n1): a ROGUE PLANET — sunless. The surface locks to permanent night +
+      // renders toward grayscale (rod-cell colour loss). Optional flag, omitted if false.
+      setExplorable(nk ? { label: p.name, url: `terra.html#x=${nk}~${p.uaddr}~${p.gaddr}~${p.saddr}~${p.addr}~${settledFlag}~${encodeURIComponent(p.name)}${p.hasLife ? `~d${Math.round(p.density * 100)}` : ''}${isStray ? '~s1' : ''}${p.noStar ? '~n1' : ''}` } : null);
       const landLine = nk
         ? (isGiant ? '  ⤓ descend to the storm shelf — thrusters hold' : '  ⤓ explore lands on its surface — an entire Atlas')
         : isGiant ? `  ⚠ storm gravity ${grav.toFixed(2)} — hover ${hoverOf(SHIP).toFixed(2)} can't hold · upgrade thrusters (⬡ ship)`

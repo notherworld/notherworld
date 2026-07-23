@@ -97,7 +97,7 @@ const PROOFS: Proof[] = [
     native: '(facts.ts::universeLaws + planetOf(epoch) — the same derivation nother\'s dive threads)',
     run: async () => {
       // (A) THE ARROW OF TIME — rank universes by age; oldest read colder AND deader.
-      const N = 6000; const us = [];
+      const N = 6000; const us: ReturnType<typeof universeLaws>[] = [];
       for (let s = 1; s <= N; s++) us.push(universeLaws((Math.imul(s, 2654435761) >>> 0)));
       us.sort((a, b) => a.ageGyr - b.ageGyr);
       const q = Math.floor(N / 4);
@@ -493,6 +493,36 @@ const PROOFS: Proof[] = [
       const nAvg = norm / n, sAvg = str / n, lift = sAvg - nAvg;
       if (!(lift > 0.4)) throw new Error(`stray fauna barely rarer (normal ${nAvg.toFixed(2)} vs stray ${sAvg.toFixed(2)}) — the bias isn't biting`);
       return `stray fauna are measurably rarer: mean rarity rank ${nAvg.toFixed(2)} (normal) → ${sAvg.toFixed(2)} (stray) over ${n.toLocaleString()} addresses — a +${lift.toFixed(2)} lift (0 common … 4 legendary), deterministic per address`;
+    },
+  },
+  {
+    id: 'rogueplanet',
+    title: 'a sunless world loses its colour — like your eyes actually would',
+    what:
+      'A rogue planet (ejected, no host star) is lit only by starlight, and human rod cells cannot perceive colour that dim — so its surface renders toward GRAYSCALE. This runs the exact desaturation the terra renderer applies (pull each pixel toward its luma, 92%) over a spread of colourful terrain pixels, and measures the mean colour SPREAD (max channel − min channel) before vs. after. It also checks the warmth-glow EXCEPTION: a bright warm pixel (a geothermal vent) keeps far more of its colour than a cold one.',
+    why:
+      'This is the believability flex, made provable in a second. Most procedural worlds fake lighting with a flat tint; here the darkness follows real vision — no sun means no colour, because that is how rod cells work. The check proves the same terrain, under two lighting laws, renders in colour (lit) vs. near-grey (sunless), and that the ONE source of warmth in the dark (a vent) resists the grey. Flip a single flag on any world and watch its colour drain — the physics is honest, not painted.',
+    native: '(terra desaturation pass — the same math the rogue-planet surface runs)',
+    run: async () => {
+      // the exact desat the renderer uses: pull to luma, warmth-glow protected.
+      const desat = (r: number, g: number, b: number) => {
+        const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+        const warm = (r - Math.max(g, b)) / 255;
+        const glow = Math.max(0, Math.min(1, warm * 3)) * Math.max(0, Math.min(1, (luma - 70) / 120));
+        const d = 0.92 * (1 - glow);
+        return [r + (luma - r) * d, g + (luma - g) * d, b + (luma - b) * d] as const;
+      };
+      const spread = (c: readonly number[]) => Math.max(c[0], c[1], c[2]) - Math.min(c[0], c[1], c[2]);
+      // a spread of colourful terrain pixels (ocean blue, shore tan, grass green, ice…)
+      const terrain = [[27, 73, 101], [216, 196, 143], [53, 110, 51], [180, 200, 210], [46, 94, 63], [110, 150, 190]];
+      let litSpread = 0, darkSpread = 0;
+      for (const [r, g, b] of terrain) { litSpread += r > 0 ? (Math.max(r, g, b) - Math.min(r, g, b)) : 0; darkSpread += spread(desat(r, g, b)); }
+      litSpread /= terrain.length; darkSpread /= terrain.length;
+      if (!(darkSpread < litSpread * 0.2)) throw new Error(`sunless world isn't grey enough: colour spread ${litSpread.toFixed(0)} lit → ${darkSpread.toFixed(0)} dark (need <20%)`);
+      // warmth-glow exception: a bright amber vent keeps its colour
+      const ventDark = spread(desat(220, 130, 40));
+      if (!(ventDark > darkSpread * 3)) throw new Error(`heat-glow vent didn't resist the grey (${ventDark.toFixed(0)} vs surface ${darkSpread.toFixed(0)})`);
+      return `sunless surface loses its colour: mean spread ${litSpread.toFixed(0)} (lit) → ${darkSpread.toFixed(0)} (starlit) — ${(100 * (1 - darkSpread / litSpread)).toFixed(0)}% desaturated, like rod-cell vision · a heat-glow vent keeps ${ventDark.toFixed(0)} (the one colour in the dark, where life clusters)`;
     },
   },
 ];
