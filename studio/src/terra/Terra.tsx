@@ -509,6 +509,9 @@ export default function Terra() {
   const viewPxRef = useRef({ x: 0, y: 0 });
   const pendingShiftRef = useRef<{ x: number; y: number } | null>(null);
   const blitRef = useRef<(() => void) | null>(null);
+  // CATCH FX — transient bursts, stored in WORLD coords so they stay pinned to the
+  // spot as you pan/zoom. The draw loop expands + fades a ring at each until it dies.
+  const catchFxRef = useRef<{ wx: number; wy: number; t0: number; hue: number }[]>([]);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null);
   const suppressClickRef = useRef(false);
@@ -675,6 +678,8 @@ export default function Terra() {
       if (best) {
         const c = faunaRef.current.find((f) => f.id === best!.id)!;
         w.set(best.id, 'caught', 1);
+        // catch juice — a burst pinned to where the creature was, in the critter's hue
+        catchFxRef.current.push({ wx: c.wx1, wy: c.wy1, t0: performance.now(), hue: c.hue });
         const key = `${c.species}:${c.gene.toFixed(3)}`;
         const entry = codexRef.current.get(key);
         if (entry) { entry.caught++; setCodexV((v) => v + 1); setCodexOpen(true); }
@@ -3447,6 +3452,47 @@ export default function Terra() {
         }
       }
 
+      // ── CATCH FX — an expanding ring + a quick flash where a creature was caught.
+      // Pinned in world space (via scopeMap) so it stays put as you pan; ~500ms life.
+      if (catchFxRef.current.length) {
+        const LIFE = 520;
+        catchFxRef.current = catchFxRef.current.filter((fx) => t - fx.t0 < LIFE);
+        for (const fxf of catchFxRef.current) {
+          const age = (t - fxf.t0) / LIFE;              // 0..1
+          const sc = scopeMap.toS(fxf.wx, fxf.wy);
+          const ccx = Math.round(sc.x), ccy = Math.round(sc.y);
+          if (ccx < -20 || ccy < -20 || ccx > GRID + 20 || ccy > GRID + 20) continue;
+          const [fr, fg, fb] = hsl(fxf.hue * 360, 70, 60);
+          const ring = 2 + age * 13;                    // radius grows
+          const a = (1 - age) * (1 - age);              // fade out (ease)
+          // ring — plot a circle of points at the current radius
+          const steps = Math.max(10, Math.round(ring * 4));
+          for (let s = 0; s < steps; s++) {
+            const ang = (s / steps) * 6.2832;
+            const gx = Math.round(ccx + Math.cos(ang) * ring), gy = Math.round(ccy + Math.sin(ang) * ring);
+            if (gx < 0 || gy < 0 || gx >= GRID || gy >= GRID) continue;
+            const k = (gy * GRID + gx) * 4;
+            data[k] = data[k] * (1 - a) + fr * a;
+            data[k + 1] = data[k + 1] * (1 - a) + fg * a;
+            data[k + 2] = data[k + 2] * (1 - a) + fb * a;
+            data[k + 3] = 255;
+          }
+          // flash — a bright core the first ~40% of life
+          if (age < 0.4) {
+            const fa = (1 - age / 0.4);
+            for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+              const gx = ccx + ox, gy = ccy + oy;
+              if (gx < 0 || gy < 0 || gx >= GRID || gy >= GRID) continue;
+              const k = (gy * GRID + gx) * 4;
+              data[k] = data[k] * (1 - fa) + 255 * fa;
+              data[k + 1] = data[k + 1] * (1 - fa) + 255 * fa;
+              data[k + 2] = data[k + 2] * (1 - fa) + 245 * fa;
+              data[k + 3] = 255;
+            }
+          }
+        }
+      }
+
       bctx.putImageData(img, 0, 0);   // compose the frame into the overscan bake…
       blit();                          // …and show the camera's window of it
     };
@@ -3558,7 +3604,7 @@ export default function Terra() {
       {!hudHidden && (<>
         <button className="atlas-reseed" onClick={reseed} title="generate a different world">⟳ new world</button>
         <button className="atlas-reseed" style={{ right: 130 }} onClick={() => setCodexOpen((v) => !v)}
-          title="what you've documented">✦ codex{codexRef.current.size ? ` ${codexRef.current.size}` : ''}</button>
+          title="what you've caught">✦ codex{(() => { const c = [...codexRef.current.values()].filter((e) => e.caught > 0).length; return c ? ` ${c}` : ''; })()}</button>
         {codexOpen && <CodexPanel entries={[...codexRef.current.values()]} v={codexV} onClose={() => setCodexOpen(false)} />}
       </>)}
       {discovery && <DiscoveryBanner d={discovery} onDone={() => setDiscovery(null)} />}
@@ -3653,7 +3699,9 @@ function CodexPanel({ entries, v, onClose }: {
   v: number; onClose: () => void;
 }) {
   void v; // version counter forces re-render as knowledge grows
-  const sorted = [...entries].sort((a, b) => b.seen - a.seen);
+  // caught entries first (your real catalog), then the seen-but-uncaught "???".
+  const sorted = [...entries].sort((a, b) => (b.caught > 0 ? 1 : 0) - (a.caught > 0 ? 1 : 0) || b.seen - a.seen);
+  const caughtN = entries.filter((e) => e.caught > 0).length;
   return (
     <div style={{
       position: 'fixed', right: 12, top: 54, width: 264, maxHeight: '72vh', overflowY: 'auto',
@@ -3663,39 +3711,48 @@ function CodexPanel({ entries, v, onClose }: {
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
         <strong style={{ fontSize: 13 }}>✦ field codex</strong>
+        <span style={{ marginLeft: 'auto', marginRight: 8, fontSize: 11, opacity: 0.6 }}>{caughtN} caught · {entries.length} seen</span>
         <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8891a8', cursor: 'pointer', font: 'inherit' }}>✕</button>
       </div>
-      {sorted.length === 0 && <div style={{ opacity: 0.6 }}>Nothing documented yet — find wildlife and click a creature to catch it.</div>}
+      {sorted.length === 0 && <div style={{ opacity: 0.6 }}>Nothing seen yet — explore, then click a creature to catch it.</div>}
       {sorted.map((e) => {
         const h6 = e.hue * 6;
         const col = `rgb(${Math.round(120 + 100 * Math.abs(Math.sin(h6)))},${Math.round(95 + 90 * Math.abs(Math.sin(h6 + 2.1)))},${Math.round(80 + 95 * Math.abs(Math.sin(h6 + 4.2)))})`;
+        // CATCH TO CATALOG: a species you've only SEEN is an unknown "???" entry —
+        // a silhouette, no name/rarity. CATCHING it reveals everything. So the codex
+        // is a record of what you've CAUGHT, not merely glimpsed; the catch is the act.
         const documented = e.caught > 0;
         return (
-          <div key={`${e.species}:${e.gene}`} style={{ borderTop: '1px solid rgba(255,255,255,0.08)', padding: '7px 0' }}>
+          <div key={`${e.species}:${e.gene}`} style={{ borderTop: '1px solid rgba(255,255,255,0.08)', padding: '7px 0', opacity: documented ? 1 : 0.72 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <span style={{
                 width: Math.round(8 + e.size * 8), height: Math.round(6 + e.size * 5),
-                background: col, borderRadius: 3, display: 'inline-block', flexShrink: 0,
+                background: documented ? col : '#3a4152',   // unknown = flat shadow, no colour tell
+                borderRadius: 3, display: 'inline-block', flexShrink: 0,
                 outline: e.extinct ? '1px solid rgba(255,120,120,0.7)' : undefined,
               }} />
               <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-                <strong style={{ textTransform: 'capitalize' }}>{commonName(e.stats)}</strong>
-                <em style={{ opacity: 0.6, fontSize: 11 }}>{taxonName(speciesKey(e.stats))}</em>
+                {documented ? <>
+                  <strong style={{ textTransform: 'capitalize' }}>{commonName(e.stats)}</strong>
+                  <em style={{ opacity: 0.6, fontSize: 11 }}>{taxonName(speciesKey(e.stats))}</em>
+                </> : <>
+                  <strong style={{ opacity: 0.7 }}>???</strong>
+                  <em style={{ opacity: 0.4, fontSize: 11 }}>seen, not yet caught</em>
+                </>}
               </div>
-              {(() => { const t = speciesRarity(e.stats).tier; return (
+              {documented && (() => { const t = speciesRarity(e.stats).tier; return (
                 <span style={{ marginLeft: 'auto', fontSize: 10, color: TIER_COLOR[t], textTransform: 'uppercase', letterSpacing: 0.5 }}>{t}</span>
               ); })()}
               {e.extinct && <span style={{ color: '#ff9a9a', fontSize: 11 }}>extinct</span>}
-              {!documented && <span style={{ opacity: 0.5, fontSize: 11 }}>undocumented</span>}
             </div>
-            <div style={{ opacity: 0.8, marginTop: 3 }}>
-              {[...e.acts].map((a) => ACT_NOTES[a] ?? a).join(' · ') || 'behavior unknown'}
-            </div>
-            {documented && (
+            {documented && (<>
+              <div style={{ opacity: 0.8, marginTop: 3 }}>
+                {[...e.acts].map((a) => ACT_NOTES[a] ?? a).join(' · ') || 'behavior unknown'}
+              </div>
               <div style={{ opacity: 0.8 }}>
                 {e.diet > 0.72 ? 'carnivore' : 'herbivore'} · {e.nocturnal > 0.5 ? 'nocturnal' : 'diurnal'} · caught ×{e.caught}
               </div>
-            )}
+            </>)}
             {e.extinct && <div style={{ color: '#ff9a9a', opacity: 0.9 }}>gone from its home range — witnessed.</div>}
           </div>
         );

@@ -307,6 +307,18 @@ export function planetOf(seed: number, index: number, star: StarLaw): PlanetLaw 
   return { type, hue, sat, r, orbit, tempK, moons, rings, life, hasLife, density, lifeRich, facts, sizeKm, grid, cloudy };
 }
 
+// SMALL BODIES (asteroids, moons) — bare rock, "likely impossible" for life. But
+// NOT a hard zero: an EXTREMOPHILE clings to a rare one (~5%), always sparse and
+// ALWAYS below the detection threshold — a barren rock that turns out to be quietly
+// alive is the ultimate camouflage payoff (§8). Same hasLife/density shape as a
+// planet's impossible band, so the surface fauna-count wiring works unchanged. The
+// orbital readout stays "likely impossible" — you only learn the truth by landing.
+export function smallBodyLife(seed: number): { hasLife: boolean; density: number; life: string } {
+  const hasLife = h(seed, 906) < 0.05;                          // ~5%, extremophile-rare
+  const density = hasLife ? clamp01(0.06 + h(seed, 907) * 0.22) : 0;   // 0.06..0.28, always < DETECT(0.45)
+  return { hasLife, density, life: 'likely impossible' };       // scan never promises life here
+}
+
 // BLACK HOLE — the wormhole network. Every hole's EXIT is part of its address:
 // the same horizon always spits you out in the same universe, for everyone.
 export function blackHoleOf(seed: number): { massM: number; exit: number; facts: string } {

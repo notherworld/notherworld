@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { describeUniverse, describeGalaxy, describeSuper, properName } from '../view/lexicon';
-import { universeFacts, superFacts, galaxyFacts, galaxyStars, starOrdinalCell, starOf, planetOf, blackHoleOf, galaxyCoreOf, setDists } from '../view/facts';
+import { universeFacts, superFacts, galaxyFacts, galaxyStars, starOrdinalCell, starOf, planetOf, blackHoleOf, galaxyCoreOf, setDists, smallBodyLife } from '../view/facts';
 import { loadCharter } from '../temple/templates';
 
 // ── THE CHARTER TAKES EFFECT AT BOOT: if this visitor has set a universe in
@@ -1653,14 +1653,16 @@ export default function Nother() {
       trackRef.current = { kind: 'moon', m: hov.m, p: hov.p };
       focusRef.current = { addr: hov.m.addr, at: performance.now() };
       const nk = hov.m.icy ? 'ice' : 'barren';
-      setExplorable({ label: hov.m.name, url: `terra.html#x=${nk}~${hov.p.uaddr}~${hov.p.gaddr}~${hov.p.saddr}~${hov.m.addr}~0~${encodeURIComponent(hov.m.name)}` });
+      const ml = smallBodyLife(hov.m.addr);   // extremophile chance — a rare moon clings to life
+      setExplorable({ label: hov.m.name, url: `terra.html#x=${nk}~${hov.p.uaddr}~${hov.p.gaddr}~${hov.p.saddr}~${hov.m.addr}~${ml.hasLife ? 1 : 0}~${encodeURIComponent(hov.m.name)}${ml.hasLife ? `~d${Math.round(ml.density * 100)}` : ''}` });
       setInfo(`${hov.m.name} · moon of ${hov.p.name} · tracking\n${hov.m.facts}\n  ⤓ explore lands on it — this moon is an Atlas world too\n  ⌖ ${hov.p.uaddr} / ${hov.p.scaddr} / ${hov.p.gaddr} / ${hov.p.saddr} / ${hov.p.addr} / ${hov.m.addr}`);
       return;
     }
     if (hov.kind === 'roid') {
       trackRef.current = { kind: 'roid', a: hov.a, belt: hov.belt };
       focusRef.current = { addr: hov.a.addr, at: performance.now() };
-      setExplorable({ label: hov.a.name, url: `terra.html#x=barren~${hov.s.uaddr}~${hov.s.gaddr}~${hov.s.addr}~${hov.a.addr}~0~${encodeURIComponent(hov.a.name)}` });
+      const al = smallBodyLife(hov.a.addr);   // a barren rock that's somehow alive — the rare payoff
+      setExplorable({ label: hov.a.name, url: `terra.html#x=barren~${hov.s.uaddr}~${hov.s.gaddr}~${hov.s.addr}~${hov.a.addr}~${al.hasLife ? 1 : 0}~${encodeURIComponent(hov.a.name)}${al.hasLife ? `~d${Math.round(al.density * 100)}` : ''}` });
       setInfo(`${hov.a.name} · belt ${hov.belt + 1} rock · tracking\n${hov.a.facts}\n  ⤓ explore lands on it\n  ⌖ ${hov.s.uaddr} / ${hov.s.scaddr} / ${hov.s.gaddr} / ${hov.s.addr} / b${hov.belt + 1} / ${hov.a.addr}`);
       return;
     }

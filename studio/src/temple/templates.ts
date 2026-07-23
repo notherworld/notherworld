@@ -343,13 +343,15 @@ export function composeSpecFor(t: SurfaceTemplate, seed: number, laws: BodyLaws,
   }
 
   if (!settled) {
-    // NATURAL REGIONS — an uninhabited world still CARVES (you can dive region →
-    // expanse at the same depth as any districted world), but the carve is keyed
-    // on LAND, not buildability, and NOTHING is built there: no buildings, no
-    // routes, no behaviors. Weather RULES stay — rain is physics, not people.
+    // UNINHABITED — no CIVILISATION (no blocks, buildings, people, roads), but the
+    // world still carves its natural regions AND still bears WILDLIFE: the kept
+    // generators are [0] fauna + [1] district, so fauna spawn on bare land with no
+    // settlement. That's how an extremophile clings to a dead asteroid (life_density
+    // sparse) — fauna without a city. Carve keyed on LAND, not buildability. Weather
+    // RULES stay — rain is physics, not people.
     const swap = (o: unknown) => JSON.parse(JSON.stringify(o).split('field(buildable, fx, fy)').join('field(land, fx, fy)').split('buildable').join('land'));
     const gens = (spec.generators ?? []) as unknown[];
-    spec.generators = gens.slice(0, 2).map(swap);        // region + expanse carves only
+    spec.generators = gens.slice(0, 2).map(swap);        // [0] fauna + [1] district — life, no civilisation
     if (spec.templates) spec.templates = swap(spec.templates);
     spec.routes = [];                                    // nobody laid roads
     spec.actions = []; spec.events = [];                 // no one to act
