@@ -233,6 +233,25 @@ export function rogueAt(base: number, cx: number, cy: number): boolean {
 export function fieldGalaxyAt(uBase: number, cx: number, cy: number): boolean {
   return h((uBase ^ (cx * 0x2545f491) ^ (cy * 0x9e3779b1)) >>> 0, 945) < 0.03;
 }
+// FREE-FLOATING ROGUE PLANETS — a starless dark world adrift in the void. "No host
+// star" doesn't mean "nowhere to be": a planet floats among the stars (galaxy view),
+// or — absurdly, rarely — in the void BETWEEN galaxies (supercluster view), or the
+// deepest "wth" case, adrift between SUPERCLUSTERS (universe view). The VIEW you find
+// it in IS the rarity tier: deeper void = rarer + dimmer, no label needed. `rate` is
+// passed per-view (galaxy ~1.5%, supercluster ~0.4%, universe ~0.1%). Own salt (947).
+export function freeFloaterAt(base: number, cx: number, cy: number, rate: number): boolean {
+  return h((base ^ (cx * 0x6a09e667) ^ (cy * 0xbb67ae85)) >>> 0, 947) < rate;
+}
+// the sunless dark world a free-floater dives into — reuses planetOf but forces the
+// noStar path via a synthetic frigid star so its planet reads 'rogue world'.
+export function freeFloaterPlanet(seed: number): PlanetLaw {
+  // a dim dead star context (never lights anything) → planetOf's cold branch; the
+  // noStar override then makes it a proper rogue world. index 0, its own address.
+  const deadStar: StarLaw = { cls: 'M', tempK: 300, hue: 8, sat: 0.4, r: 1, planets: 1, belts: 0, life: 'none detected', facts: '' };
+  const p = planetOf(seed, 0, deadStar);
+  // FORCE rogue-world regardless of the roll — a free-floater is starless by definition.
+  return { ...p, noStar: true, type: 'rogue world', hue: 230, sat: 0.12, life: 'likely impossible' };
+}
 /** a rogue star: full star physics + its exile backstory. */
 export function rogueStarOf(seed: number): RogueStar {
   const s = starOf(seed);

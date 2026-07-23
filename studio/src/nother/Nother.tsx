@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { describeUniverse, describeGalaxy, describeSuper, properName } from '../view/lexicon';
-import { universeFacts, universeLaws, superFacts, galaxyFacts, galaxyStars, starOrdinalCell, starOf, planetOf, blackHoleOf, galaxyCoreOf, setDists, smallBodyLife, giantGravity, rogueAt, rogueStarOf, fieldGalaxyAt } from '../view/facts';
+import { universeFacts, universeLaws, superFacts, galaxyFacts, galaxyStars, starOrdinalCell, starOf, planetOf, blackHoleOf, galaxyCoreOf, setDists, smallBodyLife, giantGravity, rogueAt, rogueStarOf, fieldGalaxyAt, freeFloaterAt } from '../view/facts';
 import { loadCharter } from '../temple/templates';
 import { loadShip, fidelityOf, hoverOf } from '../game/ship';
 import { ShipPanel } from '../game/ShipPanel';
@@ -201,6 +201,22 @@ function fieldGalAt(uBase: number, uaddr: number, cx: number, cy: number, CELL: 
   const isolated = `  FIELD GALAXY · adrift in a cosmic void\n  no supercluster — the nearest is millions of ly off`;
   return { ...g, cell: [cx, cy, -1], name: `${properName(g.gseed)} (field)`, facts: `${isolated}\n${g.facts}` };
 }
+// a FREE-FLOATING ROGUE PLANET at a given view. `base`/addrs identify the parent
+// scope; the VIEW (tier) sets the isolation lore + how absurd the find is. Its addr
+// chain uses the parent addrs + its own; -2 cell markers distinguish it in the link.
+function floaterAt(base: number, uaddr: number, scaddr: number, gaddr: number, cx: number, cy: number, CELL: number, tier: Floater['tier']): Floater {
+  const seed = mix(mix(base ^ cellHash(cx, cy)) ^ 0x517cc1b7);
+  const addr = 100 + (seed % 999900);
+  const lore = tier === 'galaxy' ? 'adrift among the stars — no sun of its own'
+    : tier === 'super' ? 'adrift BETWEEN galaxies — attached to nothing'
+    : 'adrift in the cosmic web, between superclusters — impossibly alone';
+  return {
+    addr, seed, uaddr, scaddr, gaddr, saddr: addr, tier,
+    wx: cx * CELL + rnd(seed, 1) * CELL, wy: cy * CELL + rnd(seed, 2) * CELL,
+    name: `${properName(seed, 9)} (rogue)`,
+    facts: `  ROGUE PLANET · sunless\n  ${lore}\n  lit only by starlight · a dark world`,
+  };
+}
 
 // ── RUNG 3: A STAR — where the facts become LAWS: class/temp/mass/worlds/life all
 // roll from the address (facts.ts starOf), and the drawn color and size follow the
@@ -334,13 +350,19 @@ function beltsFor(s: Star, planets: Planet[]): Belt[] {
 }
 
 // what the rAF loop reports as "under the cursor" — one shape for every rung
+// a FREE-FLOATING ROGUE PLANET — a starless dark world adrift in a void. Not in a
+// system; found directly in a space view (galaxy / supercluster / universe). Carries
+// its address chain + seed so it can dive straight to the sunless terra world.
+interface Floater { addr: number; seed: number; wx: number; wy: number; name: string; facts: string;
+  uaddr: number; scaddr: number; gaddr: number; saddr: number; tier: 'galaxy' | 'super' | 'universe' }
 type Hover =
   | { kind: 'uni'; u: Uni } | { kind: 'sc'; sc: SC }
   | { kind: 'gal'; g: Gal } | { kind: 'star'; s: Star }
   | { kind: 'core'; g: Gal }                              // a galaxy's supermassive heart
   | { kind: 'planet'; p: Planet }
   | { kind: 'moon'; m: Moon; p: Planet }
-  | { kind: 'roid'; a: Roid; s: Star; belt: number };
+  | { kind: 'roid'; a: Roid; s: Star; belt: number }
+  | { kind: 'floater'; f: Floater };                     // a starless rogue planet in the void
 // which rung we're rendering — the NEXT-map of this half of the ladder
 type Layer =
   | { kind: 'multiverse' }
@@ -937,6 +959,26 @@ export default function Nother() {
               }
             }
           }
+
+          // FREE-FLOATING ROGUE PLANET between SUPERCLUSTERS — a single planet adrift
+          // in the cosmic web itself. The rarest, dimmest, most absurd find (~0.1%):
+          // "okay NOW that's rare, what the hell." The view alone tells you.
+          for (let cx = c0x; cx <= c1x; cx++) for (let cy = c0y; cy <= c1y; cy++) {
+            if (!freeFloaterAt(u.base, cx, cy, 0.001)) continue;
+            const seed = mix(mix(u.base ^ cellHash(cx, cy)) ^ 0x517cc1b7);
+            const fwx = cx * SCCELL + rnd(seed, 1) * SCCELL, fwy = cy * SCCELL + rnd(seed, 2) * SCCELL;
+            const sx = (fwx - ox) * Z, sy = (fwy - oy) * Z;
+            if (sx < -6 || sy < -6 || sx > W + 6 || sy > H + 6) continue;
+            const tell = 0.5 + 0.5 * Math.sin(t * 0.7 + rnd(seed, 16) * 6.283);
+            const bb = 20 + 24 * tell;
+            if (mLo) { const d = Math.hypot(mLo.x - sx, mLo.y - sy); if (d < 9 && d < hovD) { hovD = d; hov = { kind: 'floater', f: floaterAt(u.base, u.addr, u.addr, u.addr, cx, cy, SCCELL, 'universe') }; } }
+            for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+              const gx = (sx + dx) | 0, gy = (sy + dy) | 0; if (gx < 0 || gy < 0 || gx >= W || gy >= H) continue;
+              const dr = Math.hypot(dx, dy) / 3; if (dr > 1) continue;
+              const gl = Math.pow(1 - dr, 2) * bb; const i = (gy * W + gx) * 3;
+              A[i] += gl * 0.45; A[i + 1] += gl * 0.55; A[i + 2] += gl * 0.85;
+            }
+          }
         }
       } else if (layer.kind === 'super') {
         // ══ INSIDE A SUPERCLUSTER — the sea of galaxies. Deep space + parallax
@@ -1074,6 +1116,26 @@ export default function Nother() {
               }
               const ci = ((sy | 0) * W + (sx | 0)) * 3; const cg = 230 * beB;
               A[ci] += cg * 0.8; A[ci + 1] += cg * 0.95; A[ci + 2] += cg * 1.2;
+            }
+          }
+
+          // FREE-FLOATING ROGUE PLANET between the GALAXIES — a planet not even in a
+          // galaxy. Rarer (~0.4%) + dimmer than the galaxy-view floater: this find is
+          // "wait, wtf." The VIEW is the rarity tier; no label needed.
+          for (let cx = c0x; cx <= c1x; cx++) for (let cy = c0y; cy <= c1y; cy++) {
+            if (!freeFloaterAt(sc.base, cx, cy, 0.004)) continue;
+            const seed = mix(mix(sc.base ^ cellHash(cx, cy)) ^ 0x517cc1b7);
+            const fwx = cx * GCELL + rnd(seed, 1) * GCELL, fwy = cy * GCELL + rnd(seed, 2) * GCELL;
+            const sx = (fwx - ox) * Z, sy = (fwy - oy) * Z;
+            if (sx < -6 || sy < -6 || sx > W + 6 || sy > H + 6) continue;
+            const tell = 0.5 + 0.5 * Math.sin(t * 0.8 + rnd(seed, 16) * 6.283);
+            const bb = 22 + 28 * tell;
+            if (mLo) { const d = Math.hypot(mLo.x - sx, mLo.y - sy); if (d < 9 && d < hovD) { hovD = d; hov = { kind: 'floater', f: floaterAt(sc.base, sc.uaddr, sc.addr, sc.addr, cx, cy, GCELL, 'super') }; } }
+            for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+              const gx = (sx + dx) | 0, gy = (sy + dy) | 0; if (gx < 0 || gy < 0 || gx >= W || gy >= H) continue;
+              const dr = Math.hypot(dx, dy) / 3; if (dr > 1) continue;
+              const gl = Math.pow(1 - dr, 2) * bb; const i = (gy * W + gx) * 3;
+              A[i] += gl * 0.5; A[i + 1] += gl * 0.6; A[i + 2] += gl * 0.85;
             }
           }
         }
@@ -1255,6 +1317,27 @@ export default function Nother() {
                 };
                 putS(k, 0); putS(-k, 0); putS(0, k); putS(0, -k);
               }
+            }
+          }
+
+          // FREE-FLOATING ROGUE PLANETS among the stars — a starless DARK world adrift
+          // with no sun. Dim BECAUSE unlit (unlike the stars): a faint cold blue-grey
+          // speck with a slow subtle pulse (the tell) so a sharp eye catches it. ~1.5%.
+          for (let cx = c0x; cx <= c1x; cx++) for (let cy = c0y; cy <= c1y; cy++) {
+            if (!freeFloaterAt(g.base, cx, cy, 0.015)) continue;
+            const seed = mix(mix(g.base ^ cellHash(cx, cy)) ^ 0x517cc1b7);
+            const fwx = cx * STCELL + rnd(seed, 1) * STCELL, fwy = cy * STCELL + rnd(seed, 2) * STCELL;
+            const sx = (fwx - ox) * Z, sy = (fwy - oy) * Z;
+            if (sx < -6 || sy < -6 || sx > W + 6 || sy > H + 6) continue;
+            const tell = 0.5 + 0.5 * Math.sin(t * 0.9 + rnd(seed, 16) * 6.283);   // slow tell
+            const bb = 26 + 34 * tell;
+            if (mLo) { const d = Math.hypot(mLo.x - sx, mLo.y - sy); if (d < 9 && d < hovD) { hovD = d; hov = { kind: 'floater', f: floaterAt(g.base, g.uaddr, g.scaddr, g.addr, cx, cy, STCELL, 'galaxy') }; } }
+            // a small cold halo + a dim core — no bright cross (it emits no light)
+            for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+              const gx = (sx + dx) | 0, gy = (sy + dy) | 0; if (gx < 0 || gy < 0 || gx >= W || gy >= H) continue;
+              const dr = Math.hypot(dx, dy) / 3; if (dr > 1) continue;
+              const gl = Math.pow(1 - dr, 2) * bb; const i = (gy * W + gx) * 3;
+              A[i] += gl * 0.5; A[i + 1] += gl * 0.6; A[i + 2] += gl * 0.85;   // cold, dim
             }
           }
         }
@@ -1601,7 +1684,8 @@ export default function Nother() {
       const hoverAddr = hov
         ? (hov.kind === 'uni' ? hov.u.addr : hov.kind === 'sc' ? hov.sc.addr : hov.kind === 'gal' ? hov.g.addr
           : hov.kind === 'core' ? -hov.g.addr : hov.kind === 'planet' ? hov.p.addr + 2000000
-          : hov.kind === 'moon' ? hov.m.addr + 4000000 : hov.kind === 'roid' ? hov.a.addr + 6000000 : hov.s.addr)
+          : hov.kind === 'moon' ? hov.m.addr + 4000000 : hov.kind === 'roid' ? hov.a.addr + 6000000
+          : hov.kind === 'floater' ? hov.f.addr + 8000000 : hov.s.addr)
         : -1;
       if (hoverAddr !== lastHover) {
         lastHover = hoverAddr;
@@ -1613,6 +1697,7 @@ export default function Nother() {
         else if (hov.kind === 'planet') setInfoRef.current(`${hov.p.name} · world of ${hov.p.sname}\n${hov.p.facts}\n  ⌖ ${hov.p.uaddr} / ${hov.p.scaddr} / ${hov.p.gaddr} / ${hov.p.saddr} / ${hov.p.addr}`);
         else if (hov.kind === 'moon') setInfoRef.current(`${hov.m.name} · moon of ${hov.p.name}\n${hov.m.facts}\n  ⌖ ${hov.p.uaddr} / ${hov.p.scaddr} / ${hov.p.gaddr} / ${hov.p.saddr} / ${hov.p.addr} / ${hov.m.addr}`);
         else if (hov.kind === 'roid') setInfoRef.current(`${hov.a.name} · belt ${hov.belt + 1} rock\n${hov.a.facts}\n  ⌖ ${hov.s.uaddr} / ${hov.s.scaddr} / ${hov.s.gaddr} / ${hov.s.addr} / b${hov.belt + 1} / ${hov.a.addr}`);
+        else if (hov.kind === 'floater') setInfoRef.current(`${hov.f.name} · ${hov.f.tier === 'galaxy' ? 'adrift among the stars' : hov.f.tier === 'super' ? 'adrift between galaxies' : 'adrift between superclusters'}\n${hov.f.facts}\n  ⌖ ${hov.f.uaddr} / ${hov.f.scaddr} / ${hov.f.gaddr} / ${hov.f.addr}`);
         else if (hov.s.bh) setInfoRef.current(`${hov.s.name} · black hole\n${hov.s.facts}\n  ⌖ ${hov.s.uaddr} / ${hov.s.scaddr} / ${hov.s.gaddr} / ${hov.s.addr}`);
         else if (hov.s.rogue) setInfoRef.current(`${hov.s.name} · rogue star · adrift beyond ${hov.s.gname}\n${hov.s.facts}\n  ⌖ ${hov.s.uaddr} / ${hov.s.scaddr} / ${hov.s.gaddr} / ${hov.s.addr}`);
         else setInfoRef.current(`${hov.s.name} · star of ${hov.s.gname}\n${hov.s.facts}\n  ⌖ ${hov.s.uaddr} / ${hov.s.scaddr} / ${hov.s.gaddr} / ${hov.s.addr}`);
@@ -1712,7 +1797,7 @@ export default function Nother() {
   // DIVE one rung down — Atlas's optical zoom-through: aim the camera at the thing,
   // drive the zoom hard; the draw loop swaps rungs when we cross the threshold.
   const diveInto = (hv: Hover) => {
-    if (hv.kind === 'planet' || hv.kind === 'core' || hv.kind === 'moon' || hv.kind === 'roid') return;   // handled by the click switch
+    if (hv.kind === 'planet' || hv.kind === 'core' || hv.kind === 'moon' || hv.kind === 'roid' || hv.kind === 'floater') return;   // handled by the click switch
     if (hv.kind === 'star' && hv.s.bh) return;                // horizons don't dive — they SWALLOW
     const at = hv.kind === 'uni'
       ? (physRef.current.get(hv.u.addr) ?? { x: hv.u.wx, y: hv.u.wy })
@@ -1874,6 +1959,16 @@ export default function Nother() {
     if (hov.kind === 'star' && hov.s.bh) { wormhole(hov.s.bhExit, hov.s.name); return; }
     if (hov.kind === 'star' && layerRef.current.kind === 'system') return;   // already inside it
     if (hov.kind === 'core') { wormhole(galaxyCoreOf(hov.g.gseed).exit, `${hov.g.name}'s core`); return; }
+    // a FREE-FLOATING ROGUE PLANET — dive STRAIGHT to its sunless surface (no star,
+    // no system to descend through). Same terra URL as an in-system rogue planet,
+    // with ~n1 (sunless) + ~s1 (stray → rarer fauna). Frigid ice terrain base.
+    if (hov.kind === 'floater') {
+      const f = hov.f;
+      focusRef.current = { addr: f.addr, at: performance.now() };
+      setExplorable({ label: f.name, url: `terra.html#x=ice~${f.uaddr}~${f.gaddr}~${f.saddr}~${f.addr}~0~${encodeURIComponent(f.name)}~s1~n1` });
+      setInfo(`${f.name} · rogue planet\n${f.facts}\n  ⤓ explore lands on its surface — a sunless, colourless world\n  ⌖ ${f.uaddr} / ${f.scaddr} / ${f.gaddr} / ${f.addr}`);
+      return;
+    }
     if (hov.kind === 'planet') {
       const p = hov.p;
       trackRef.current = { kind: 'planet', p };          // camera rides the orbit
