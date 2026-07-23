@@ -332,7 +332,76 @@ export default function About() {
           </blockquote>
         </Sec>
 
-        <Sec n="10" title="the consequence">
+        <Sec n="10" title="every rung is a whole game">
+          <p>
+            To be explicit about what the tower means, because it is easy to read it as smaller
+            than it is: <b>every rung can be a full game.</b> The multiverse view is not a menu for
+            picking a universe. It is a playable space in its own right, with room for hundreds of
+            thousands of rules, goals, and interactions before you ever click down. A universe is
+            not a backdrop simulating millions of dead stars. It is another full game. So is a
+            galaxy, a star, a planet, a town, a life — the Paris hotel earning its Michelin star
+            lives at exactly that last rung.
+          </p>
+          <p>
+            The misread comes from mixing up two numbers. A rung hands the rung below it a small
+            set of constants, and those constants carry real causal weight: a hotter star makes a
+            hotter planet, and <a href="/proofs.html">the proofs page checks that across thousands
+            of stars</a>. But a handful of numbers going down says nothing about how much game
+            exists where you stand. A parent seeds its child; it never caps it. And any rung you
+            are not standing on folds back to its address and costs nothing while you are away
+            (<a href="/proofs.html">the sim-LOD audit checks this too</a>), so you only pay for the
+            rung under your feet.
+          </p>
+          <p>
+            Keep descending past where shipped games stop. <b>Shrink to the size of a gnat</b> and
+            every creature around you, one stat-bearing entity a rung up, opens into a world of its
+            own: its biology, its colony, the terrain of a single leaf, with as much play in it as
+            the town you came from. <b>Shrink again</b> and one skin cell is a beatable world:
+            organelles as characters, chemistry as law, win conditions of its own, while everything
+            above keeps turning. <b>Go atomic</b> and there is still no floor. Bonds, charge, and
+            decay as mechanics, hundreds of thousands of possible goals, because "atom" is one more
+            address to the same interpreter, which never finds out it went small.
+          </p>
+          <p>
+            All of that is working logic, not stored content. Each tier adds what its formulas
+            weigh: kilobytes of JSON. The whole tower stays small enough to email.
+          </p>
+          <blockquote>
+            A rung never just simulates a million dead things. It <em>is</em> a game as big as the
+            biggest ever made. Every rung. Every time. Addressable.
+          </blockquote>
+        </Sec>
+
+        <Sec n="11" title="scale stops being a metric">
+          <p>
+            Game size has been a headline number for as long as worlds have been stored: blocks
+            wide, planets counted, gigabytes on the box. The number meant something because it was
+            expensive — it measured how much content a studio could afford to build and ship. No
+            Man's Sky's eighteen quintillion planets take about <b>200 GB</b>. The tower described
+            here is a <b>~0.6&nbsp;MB</b> program.
+          </p>
+          <p>
+            Once size is computed from an address, another whole level of scale costs a few lines
+            of formula and a wider coordinate, and the download stays the same whether the tower is
+            five levels or fifty. Anyone holding the engine can add a level for nothing, and a
+            number everyone can max out for free stops being a way to keep score. This may be close
+            to the last moment "the biggest world" is worth claiming — not because nobody will
+            build bigger, but because after this, bigger is free.
+          </p>
+          <p>
+            What's left is the thing storage never measured: <b>how much meaning lives at each
+            address.</b> The megabytes stay flat as the tower deepens; the authoring does not. The
+            axis that survives is not how large a world is but how alive it is — the density of
+            consequence, history, and life per address, which no formula hands you and no storage
+            budget can buy.
+          </p>
+          <blockquote>
+            The trade on offer: unbounded scale for free, and the quality of the authoring becomes
+            the whole game.
+          </blockquote>
+        </Sec>
+
+        <Sec n="12" title="the consequence">
           <p>
             If the above is right, then storing a world is a choice you make for a reason, not a
             default you accept for free — and for anything structured and multi-scale (a body, a
