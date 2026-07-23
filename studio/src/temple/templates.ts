@@ -157,6 +157,33 @@ export const TEMPLATES: SurfaceTemplate[] = [
     },
   },
   {
+    // THE STORM SHELF — a gas giant's flight layer, unlocked by the thruster gate
+    // (facts.ts giantGravity vs ship hover). Not ground: a shelf of dense cloud-tops
+    // ("land") over the deep amber windsea ("ocean"). Nobody builds here (always
+    // arrives unsettled), but the aerial biome lives: thin-at-the-float-layer air
+    // breeds flyers (bodyLaws 'gas' branch). NMS has no equivalent — this is ours.
+    key: 'gas', label: 'storm shelf', blurb: 'a giant’s flight layer -- cloud shelves over a deep windsea, everything that lives here flies',
+    society: 'none',
+    fields: {
+      // banded: latitude stripes (the fy term) over slow storm noise — reads as a
+      // giant's cloud bands from altitude, not as rock.
+      elevation: 'clamp(noise(fx*2.1,fy*6.5)*0.5 + 0.34 + sin(fy*31)*0.09 + (noise(fx*8+91.3,fy*8+91.3)-0.5)*0.18, 0, 1)',
+    },
+    geology: { seaLevel: 0.52, snowLine: 0.93, glowSea: false },
+    transitions: { shoreWidth: 0.03, beachKind: 'shelf', foam: 0.7, band: 'city' },
+    flora: { density: 0 },
+    weather: { rain: 0.5, cloud: 0.85 },
+    roads: { mode: 'free', lattice: 0, wander: 0, terrain: 1, loops: 0 },
+    buildings: { form: 'masonry', density: 0 },
+    beings: { form: 'biped', size: 1, pace: 1 },
+    skin: {
+      sea: '#8a5a24', low: '#b98c4e', mid: '#d4ab6a', high: '#e8cf9a', snow: '#f4ead2',
+      shore: '#c89a58', flora: '#a08050', rain: '#e8d0a0', district: '#000000', lot: '#000000', road: '#000000',
+      building: '#000000', being: '#000000',
+      seaLabel: 'deep windsea', capLabel: 'high haze', rainLabel: 'ammonia squall', shoreLabel: 'shelf edges',
+    },
+  },
+  {
     key: 'barren', label: 'barren', blurb: 'no one lives here -- pure geology, pebble strands, weather and silence (level V gates the rest away)',
     society: 'none',
     geology: { seaLevel: 0.38, snowLine: 0.8, glowSea: false },
@@ -280,6 +307,7 @@ export function bodyLaws(seed: number, nk: string): BodyLaws {
   const cov = nk === 'lava' ? 0.15 + r(61) * 0.65        // 15–80% molten
     : nk === 'ice' ? 0.2 + r(61) * 0.5
     : nk === 'verdant' ? 0.25 + r(61) * 0.45
+    : nk === 'gas' ? 0.4 + r(61) * 0.4                   // storm shelf: a wide windsea
     : 0.05 + r(61) * 0.35;                               // barren: dry to modest seas
   const seaLevel = 0.3 + cov * 0.45;
   const iceLine = nk === 'ice' ? Math.min(0.95, seaLevel + 0.04 + r(62) * 0.16)  // frozen near the shore
@@ -292,12 +320,16 @@ export function bodyLaws(seed: number, nk: string): BodyLaws {
   // lush. Each is centre ± spread, clamped to the bestiary's 0..1 law range.
   const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
   const heatCentre = nk === 'lava' ? 0.9 : nk === 'ice' ? 0.12 : nk === 'verdant' ? 0.55 : 0.5;
-  const lushCentre = nk === 'verdant' ? 0.85 : nk === 'ice' ? 0.25 : nk === 'lava' ? 0.15 : 0.4;
-  const airCentre  = nk === 'verdant' ? 0.7 : nk === 'barren' ? 0.4 : 0.55; // barren = thinner → more flyers
+  const lushCentre = nk === 'verdant' ? 0.85 : nk === 'ice' ? 0.25 : nk === 'lava' ? 0.15 : nk === 'gas' ? 0.3 : 0.4;
+  // 'gas' airCentre is LOW: at the flight layer the effective air is thin-to-a-
+  // floater, and thin air breeds flyers (the genome law) — so the storm shelf's
+  // fauna skews hard aerial, which is the whole point of descending.
+  const airCentre  = nk === 'verdant' ? 0.7 : nk === 'barren' ? 0.4 : nk === 'gas' ? 0.18 : 0.55;
   const heat    = clamp01(heatCentre + (r(70) - 0.5) * 0.3);
   const lush    = clamp01(lushCentre + (r(71) - 0.5) * 0.3);
   const air     = clamp01(airCentre + (r(72) - 0.5) * 0.5);   // wide spread — aviary vs grounded is the variance
-  const gravity = clamp01(0.2 + r(73) * 0.7);                 // 0.2–0.9, uncorrelated to type
+  // giants are heavy (matches facts.ts giantGravity's high band); rock rolls wide
+  const gravity = nk === 'gas' ? clamp01(0.55 + r(73) * 0.45) : clamp01(0.2 + r(73) * 0.7);
   return {
     seaLevel, iceLine, relief, freq, liquid: nk === 'lava' ? 'lava' : 'water',
     blend: 0.55 + r(65) * 0.45,                          // 55–100% its type
@@ -365,6 +397,8 @@ export function templeFor(
   naturalKey: string,                                     // what the body's physics say it is
 ): { tpl: SurfaceTemplate; note: string } {
   const natural = TEMPLATES.find((t) => t.key === naturalKey) ?? TEMPLATES[TEMPLATES.length - 1];
+  // a giant's flight layer is physics, not culture — no charter overrides it
+  if (naturalKey === 'gas') return { tpl: natural, note: 'the storm layer keeps its own laws' };
   const ch = loadCharter();
   if (!ch) return { tpl: natural, note: 'natural laws (no charter set)' };
   let strength = Math.max(0, Math.min(1, ch.strength));

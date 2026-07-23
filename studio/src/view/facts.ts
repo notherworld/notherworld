@@ -41,9 +41,9 @@ const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
 // below it, the orbital life readout FLIPS (false "signs detected" / false "likely
 // impossible") with probability (1 - fidelity), per address, deterministically.
 // This is EQUIPMENT quality, not a world law — the planet's ground truth never
-// changes; a better scanner just distorts less. Fixed base rate for now (~1.5%
-// lies); the future upgrade layer will thread a per-player fidelity into planetOf
-// and a scanner upgrade raises this number. Kept as one named dial for that swap.
+// changes; a better scanner just distorts less. THE UPGRADE LAYER IS LIVE:
+// planetOf takes a per-player `fidelity` (game/ship.ts SCANNER_TIERS threads it
+// through nother); this constant is tier 0, the stock instrument (~1.5% lies).
 //
 // ⚠ LOAD-BEARING INVARIANT — the malfunction MUST stay a threshold on ONE fixed
 // roll: `h(seed, 918) > fidelity`. The lying set is { world : h(world,918) > fid },
@@ -55,7 +55,17 @@ const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
 // would MINT NEW LIES on upgrade — a world you'd verified could start lying again —
 // and break the re-check guarantee. When the upgrade layer lands, GUARD it:
 // lies(better) ⊆ lies(worse), plus the ~1.5% base rate in BOTH directions.
-const SCANNER_FIDELITY = 0.985;
+export const SCANNER_FIDELITY = 0.985;
+
+// ── GIANT GRAVITY — a gas/ice giant's storm-layer gravity, a fixed ADDRESS LAW
+// (0.55–1.0, deterministic, own salt). It is a TRAVERSAL gate: the ship's hover
+// rating (game/ship.ts HOVER_TIERS) must meet it to descend to the storm shelf.
+// Equipment-as-progression, same shape as scanner fidelity: the world never
+// changes — what you can reach does. Rolled off the planet's public address so
+// every surface (orbit info, gate check) derives the identical number.
+export function giantGravity(seed: number): number {
+  return 0.55 + h(seed, 933) * 0.45;
+}
 
 // how each universe's physics leans — later this biases the actual generators
 const BIAS = [
@@ -181,7 +191,7 @@ export interface PlanetLaw {
                                   // a big planet is literally more world to explore
   cloudy: boolean;                // heavy atmosphere (charter-tiltable)
 }
-export function planetOf(seed: number, index: number, star: StarLaw): PlanetLaw {
+export function planetOf(seed: number, index: number, star: StarLaw, fidelity: number = SCANNER_FIDELITY): PlanetLaw {
   const orbit = (index + 1) * (0.55 + 0.5 * h(seed, 901));            // AU-ish
   const tempK = Math.round(star.tempK * 0.048 / Math.sqrt(orbit));    // Earth ≈ 277 K sanity
   const gas = index >= 2 && h(seed, 902) > 0.62;
@@ -234,7 +244,13 @@ export function planetOf(seed: number, index: number, star: StarLaw): PlanetLaw 
   // is the point: the scan saves you time statistically without ever letting you —
   // or us — write a world off as dead from orbit.
   const presenceP: Record<string, number> = { favorable: 0.82, possible: 0.62, unlikely: 0.35, impossible: 0.1 };
-  const hasLife = !gas && h(seed, 906) < presenceP[conditions];
+  // GAS GIANTS BEAR HIDDEN AERIAL LIFE (~22%) — floaters in the storm layer. Their
+  // density is ALWAYS below the detection threshold, so every giant reads "likely
+  // impossible" from orbit forever (perfect camouflage, same law as extremophiles);
+  // the truth is only reachable by descending — which the thruster gate (giantGravity
+  // + ship hover) must first permit. Life ≠ settlement: the unsettled compose path
+  // spawns fauna with no civilisation, so a living giant is wildlife in the clouds.
+  const hasLife = gas ? h(seed, 906) < 0.22 : h(seed, 906) < presenceP[conditions];
   // magnitude: centred per band with a WIDE spread, positioned so the detection
   // threshold (0.45) cuts THROUGH the has-life distribution in every band — that's
   // what makes the camouflage real: favorable life is usually (not always) dense
@@ -258,10 +274,11 @@ export function planetOf(seed: number, index: number, star: StarLaw): PlanetLaw 
   // impossible" over a teeming one. Own salt (918) → deterministic per address, so
   // the same world lies the same way until you re-scan with a better instrument.
   // FIDELITY IS EQUIPMENT, NOT WORLD: the world's truth (hasLife/density) is fixed
-  // forever; fidelity is the player's scanner quality. Today it's a fixed base rate;
-  // when the upgrade layer lands, planetOf takes a fidelity arg and a better scanner
-  // simply passes a higher number — fewer lies, same worlds. One-line swap, no rework.
-  const malfunction = h(seed, 918) > SCANNER_FIDELITY;
+  // forever; fidelity is the player's scanner quality — the `fidelity` arg (default
+  // = the stock instrument). A better scanner passes a higher number: fewer lies,
+  // SAME worlds — the threshold-on-one-roll invariant above makes upgrades
+  // monotonic (lies(better) ⊆ lies(worse)), guarded by the /proofs equipment card.
+  const malfunction = h(seed, 918) > fidelity;
   const reported = malfunction ? !detected : detected;
   // the readout STRING (player-facing) reflects what the scanner REPORTS. "signs
   // detected" only when reported; else the CONDITIONS band verbatim. Honest readings

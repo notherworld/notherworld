@@ -7,7 +7,8 @@
 // the worlds right now.
 import { useState } from 'react';
 import { createWorld, type Snapshot } from '../owos';
-import { starOf, planetOf, galaxyStars, type StarLaw } from '../view/facts';
+import { starOf, planetOf, galaxyStars, giantGravity, type StarLaw } from '../view/facts';
+import { SCANNER_TIERS, HOVER_TIERS } from '../game/ship';
 import { speciesKey, breedKey, taxonName, speciesRarity, SPECIES_TOTAL, BREEDS_TOTAL, type Stats } from '../design/creature';
 import hotelSpec from '../../../worlds/hotel.json';
 import craftSpec from '../../../worlds/craft.json';
@@ -323,6 +324,60 @@ const PROOFS: Proof[] = [
       if (fpPct < 0.5 || fpPct > 6) throw new Error(`false-positive detections ${fpPct.toFixed(1)}% — malfunction should be rare (~1-3%), not ${fpPct > 6 ? 'common' : 'absent'}`);
       if (fnPct < 0.5 || fnPct > 6) throw new Error(`false-negative readings ${fnPct.toFixed(1)}% — malfunction should be rare (~1-3%), not ${fnPct > 6 ? 'common' : 'absent'}`);
       return `${alivePct.toFixed(0)}% of rocky worlds alive · ${camoPct.toFixed(0)}% of "none detected" secretly alive (no safe skip) · ${teaserPct.toFixed(0)}% of favorable readings are dead teasers (no promise) · scanner lies ~${fpPct.toFixed(1)}% false-positive / ~${fnPct.toFixed(1)}% false-negative (rare instrument fault) · 0 extremophiles ever detectable · density tracks band (fav ${df.toFixed(2)} > unl ${du.toFixed(2)})`;
+    },
+  },
+  {
+    id: 'equipment',
+    title: 'upgrades clear lies and open doors — they never reshuffle the world',
+    what:
+      'Runs the SAME ~50k worlds through every scanner tier and checks the MONOTONICITY contract: the set of worlds that lie to a better scanner is a strict subset of the set that lies to a worse one — an upgrade only ever REMOVES lies, never mints new ones, and never changes any world\'s ground truth. Then checks the thruster gate the same way: each hover tier\'s reachable gas giants strictly contain the tier below\'s, and a giant\'s storm gravity is a fixed address law identical on every read.',
+    why:
+      'Equipment is the progression axis, and it is only fair if it is monotonic. Because the scanner malfunction is a THRESHOLD on one fixed per-world roll (h(seed,918) > fidelity), raising fidelity can only raise the bar — a world you verified with a good instrument can never start lying again, and re-visiting a misread world with a better scanner reveals what was always there. Same law for thrusters: gravity is the world\'s, hover is yours; upgrading expands where you can go without moving a single world. If this row ever fails, an upgrade somewhere is rewriting reality instead of your access to it.',
+    native: '(facts.ts::planetOf(fidelity) + giantGravity vs game/ship.ts tiers)',
+    run: async () => {
+      // (1) SCANNER — lying sets shrink monotonically across the real tier ladder
+      const tiers = SCANNER_TIERS.map((t) => t.value);
+      const liars: Set<number>[] = tiers.map(() => new Set());
+      let worlds = 0;
+      for (let s = 1; s <= 12000; s++) {
+        const sseed = (Math.imul(s, 2654435761) >>> 0);
+        const star = starOf(sseed);
+        for (let i = 0; i < star.planets; i++) {
+          const pseed = (Math.imul(sseed ^ (i + 1), 0x9e3779b1) >>> 0);
+          worlds++;
+          const truth = planetOf(pseed, i, star, 1.0);           // the perfect instrument
+          for (let k = 0; k < tiers.length; k++) {
+            const read = planetOf(pseed, i, star, tiers[k]);
+            if (read.life !== truth.life) liars[k].add(pseed);
+            // ground truth NEVER moves with the instrument
+            if (read.hasLife !== truth.hasLife || read.density !== truth.density)
+              throw new Error('scanner fidelity changed a world\'s ground truth — equipment rewrote reality');
+          }
+        }
+      }
+      for (let k = 1; k < tiers.length; k++) {
+        for (const w of liars[k]) if (!liars[k - 1].has(w))
+          throw new Error(`tier ${k} lies about a world tier ${k - 1} read truly — upgrade MINTED a lie`);
+        if (liars[k].size > liars[k - 1].size) throw new Error('a better scanner lies MORE');
+      }
+      const basePct = (100 * liars[0].size) / worlds;
+      if (basePct < 0.5 || basePct > 4) throw new Error(`stock scanner lies ${basePct.toFixed(2)}% — expected ~1-2%`);
+      if (liars[tiers.length - 1].size !== 0) throw new Error('the maxed scanner still lies');
+      // (2) THRUSTERS — reachable giants nest upward; gravity is a stable address law
+      const hovers = HOVER_TIERS.map((t) => t.value);
+      const reach = hovers.map(() => 0);
+      let giants = 0;
+      for (let a = 1; a <= 40000; a++) {
+        const g = giantGravity(a);
+        if (g !== giantGravity(a)) throw new Error('giantGravity unstable — the gate would flicker');
+        giants++;
+        for (let k = 0; k < hovers.length; k++) if (hovers[k] >= g) reach[k]++;
+      }
+      for (let k = 1; k < hovers.length; k++)
+        if (reach[k] < reach[k - 1]) throw new Error('a thruster upgrade LOST access — gate not monotonic');
+      if (reach[0] !== 0) throw new Error('stock thrusters reach giants — the gate is open by default');
+      if (reach[hovers.length - 1] !== giants) throw new Error('maxed thrusters still refused a giant');
+      return `${worlds.toLocaleString()} worlds × ${tiers.length} scanner tiers: lying sets nest ${liars.map((l) => l.size.toLocaleString()).join(' ⊇ ')} (stock ${basePct.toFixed(1)}% → maxed 0), zero minted lies, ground truth untouched · thruster reach nests ${reach.map((r) => `${((100 * r) / giants).toFixed(0)}%`).join(' ⊆ ')} of giants`;
     },
   },
   {

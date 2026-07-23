@@ -1,13 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { describeUniverse, describeGalaxy, describeSuper, properName } from '../view/lexicon';
-import { universeFacts, superFacts, galaxyFacts, galaxyStars, starOrdinalCell, starOf, planetOf, blackHoleOf, galaxyCoreOf, setDists, smallBodyLife } from '../view/facts';
+import { universeFacts, superFacts, galaxyFacts, galaxyStars, starOrdinalCell, starOf, planetOf, blackHoleOf, galaxyCoreOf, setDists, smallBodyLife, giantGravity } from '../view/facts';
 import { loadCharter } from '../temple/templates';
+import { loadShip, fidelityOf, hoverOf } from '../game/ship';
+import { ShipPanel } from '../game/ShipPanel';
 
 // ── THE CHARTER TAKES EFFECT AT BOOT: if this visitor has set a universe in
 // temple, its distribution dials override the base notherverse BEFORE any fact
 // sheet or system is derived. One localStorage read; everything downstream obeys.
 const bootCharter = loadCharter();
 if (bootCharter?.dists) setDists(bootCharter.dists);
+
+// ── THE SHIP TAKES EFFECT AT BOOT TOO — the player's equipment (game/ship.ts).
+// Scanner fidelity threads into every planetOf derivation; thruster hover gates
+// which giants will let you descend. Mutable: buying an upgrade updates it live —
+// sheets derived AFTER the purchase read the new instrument (monotonic by the
+// facts.ts invariant, so an upgrade only ever clears lies, never mints them).
+const SHIP = loadShip();
 
 // ── NOTHERSPACE — the TOP of the address ladder (see memory: notherspace-address-ladder).
 //   multiverse > universe > supercluster > galaxy > star > … > [Atlas: city > … > farmer]
@@ -243,7 +252,7 @@ function planetsFor(s: Star): Planet[] {
   return Array.from({ length: s.planets }, (_, i) => {
     const pseed = mix(s.base ^ Math.imul(i + 1, 0x9e3779b1));
     const addr = 100 + (pseed % 999900);
-    const law = planetOf(pseed, i, starLaw);
+    const law = planetOf(pseed, i, starLaw, fidelityOf(SHIP));   // read through YOUR scanner
     const moonsD: Moon[] = Array.from({ length: law.moons }, (_, j) => {
       const mseed = mix(pseed ^ Math.imul(j + 1, 0xc2b2ae35));
       const icy = rnd(mseed, 3) > 0.5;
@@ -376,6 +385,7 @@ export default function Nother() {
   // the currently selected surface-bearing body — powers the ⤓ land prompt that
   // floats IN THE SCENE under the tracked body (the camera holds it centered)
   const [explorable, setExplorable] = useState<{ label: string; url: string } | null>(null);
+  const [shipOpen, setShipOpen] = useState(false);   // the ⬡ ship panel (game/ShipPanel)
   const setExplorableRef = useRef(setExplorable); setExplorableRef.current = setExplorable;
   const explore = () => {
     if (!explorable || warpRef.current) return;
@@ -1640,13 +1650,27 @@ export default function Nother() {
       const p = hov.p;
       trackRef.current = { kind: 'planet', p };          // camera rides the orbit
       focusRef.current = { addr: p.addr, at: performance.now() };
-      // which surface template this body's PHYSICS asks for (the charter may override)
+      // which surface template this body's PHYSICS asks for (the charter may override).
+      // GIANTS ARE A THRUSTER GATE, not a wall: descending to the storm shelf needs
+      // hover ≥ the giant's storm gravity (a fixed address law, facts.ts giantGravity).
+      // Under-equipped, the prompt tells you WHY — locked content you can SEE is the
+      // progression hook. Cleared, the storm-shelf template opens (aerial biome).
+      const isGiant = p.type.includes('giant');
+      const grav = isGiant ? giantGravity(p.addr) : 0;
+      const canHover = !isGiant || hoverOf(SHIP) >= grav;
       const nk = p.type === 'lava world' ? 'lava'
         : p.type === 'living world' || p.type === 'ocean world' ? 'verdant'
         : p.type === 'ice world' || p.type === 'tundra world' ? 'ice'
-        : p.type.includes('giant') ? null : 'barren';
-      setExplorable(nk ? { label: p.name, url: `terra.html#x=${nk}~${p.uaddr}~${p.gaddr}~${p.saddr}~${p.addr}~${p.hasLife ? 1 : 0}~${encodeURIComponent(p.name)}${p.hasLife ? `~d${Math.round(p.density * 100)}` : ''}` } : null);
-      setInfo(`${p.name} · world of ${p.sname} · tracking\n${p.facts}\n${nk ? '  ⤓ explore lands on its surface — an entire Atlas' : '  no surface to land on'}\n  ⌖ ${p.uaddr} / ${p.scaddr} / ${p.gaddr} / ${p.saddr} / ${p.addr}`);
+        : isGiant ? (canHover ? 'gas' : null) : 'barren';
+      // a giant is NEVER 'settled' (nobody builds on wind) — its hidden aerial life
+      // rides the ~d density segment alone; the unsettled path spawns fauna, no city.
+      const settledFlag = isGiant ? 0 : (p.hasLife ? 1 : 0);
+      setExplorable(nk ? { label: p.name, url: `terra.html#x=${nk}~${p.uaddr}~${p.gaddr}~${p.saddr}~${p.addr}~${settledFlag}~${encodeURIComponent(p.name)}${p.hasLife ? `~d${Math.round(p.density * 100)}` : ''}` } : null);
+      const landLine = nk
+        ? (isGiant ? '  ⤓ descend to the storm shelf — thrusters hold' : '  ⤓ explore lands on its surface — an entire Atlas')
+        : isGiant ? `  ⚠ storm gravity ${grav.toFixed(2)} — hover ${hoverOf(SHIP).toFixed(2)} can't hold · upgrade thrusters (⬡ ship)`
+        : '  no surface to land on';
+      setInfo(`${p.name} · world of ${p.sname} · tracking\n${p.facts}\n${landLine}\n  ⌖ ${p.uaddr} / ${p.scaddr} / ${p.gaddr} / ${p.saddr} / ${p.addr}`);
       return;
     }
     if (hov.kind === 'moon') {
@@ -1683,6 +1707,7 @@ export default function Nother() {
           <div className="nother-hud-trail">
             <b>{trail.head}</b><span className="dim" style={{ color: 'var(--ink-dim)' }}>{trail.rest}</span>
             <button className="nother-copy" onClick={copyLink} title="copy a link to this exact place">⌖ link</button>
+            <button className="nother-copy" onClick={() => setShipOpen((v) => !v)} title="your ship — data + upgrades">⬡ ship</button>
             {explorable && (
               <button className="nother-copy nother-explore" title={`land on ${explorable.label}`} onClick={explore}>⤓ explore</button>
             )}
@@ -1696,6 +1721,11 @@ export default function Nother() {
         </div>
       ) : (
         <button className="nother-showhud" onClick={() => setHudOpen(true)}>H · show</button>
+      )}
+      {shipOpen && (
+        <ShipPanel ship={SHIP} onClose={() => setShipOpen(false)}
+          note="new readings apply to systems you derive from here on — re-visit a misread world to confirm."
+          onChange={() => setInfo((s) => s)} />
       )}
     </div>
   );

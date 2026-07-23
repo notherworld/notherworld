@@ -34,6 +34,8 @@ import { makeScopeMap, localToScreenWith, regionCells, cellsCenter, type ScopeMa
 // our data" path.
 import worldSpec from './world.json';
 import { drawSilhouette, commonName, speciesKey, breedKey, taxonName, speciesRarity, breedRarity } from '../design/creature';   // ONE compositor — the same fn /bestiary.html draws with
+import { loadShip, saveShip, rigBonusOf, earnForCatch } from '../game/ship';   // the equipment layer: rig eases catches, catches earn ⬡ data
+import { ShipPanel } from '../game/ShipPanel';
 import './terra.css';
 // ⤓ EXPLORE ARRIVAL — how a notherspace body lands here as a REAL world. The
 // address chain seeds it; templeFor applies the visitor's universe charter
@@ -80,6 +82,7 @@ const SNOWLINE = ARRIVAL ? ARRIVAL.laws.iceLine : 0.83;   // icy world = frost f
 const VEG = ARRIVAL
   ? (ARRIVAL.tpl.key === 'verdant' ? 1
     : ARRIVAL.tpl.key === 'ice' ? 0.2 + (1 - ARRIVAL.laws.blend) * 0.5
+    : ARRIVAL.tpl.key === 'gas' ? 0            // nothing roots on a cloud shelf
     : (1 - ARRIVAL.laws.blend) * 0.45)
   : 1;
 // no one has ever NAMED an uninhabited place — sectors and zones, not Kingsyard
@@ -205,6 +208,46 @@ export default function Terra() {
   // speciesKey/breedKey ever CAUGHT is remembered across sessions in localStorage, so
   // "first to catch this body-plan" is a permanent, personal fact. Prefixed s:/b:.
   const discoveredRef = useRef<Set<string>>(new Set(loadDiscovered()));
+  // ── THE SHIP — the player's equipment (game/ship.ts). Rig bonus applies to every
+  // catch attempt; successful catches EARN ⬡ data (rarity-priced), which buys the
+  // upgrades. One persisted object shared with nother (localStorage nother_ship).
+  const shipRef = useRef(loadShip());
+  const [shipOpen, setShipOpen] = useState(false);
+  const [shipV, setShipV] = useState(0);            // re-render the data chip on change
+  void shipV;                                       // (read for the re-render, not the value)
+  const [toast, setToast] = useState<{ msg: string; key: number } | null>(null);
+  const say = (msg: string) => {
+    const key = performance.now();
+    setToast({ msg, key });
+    setTimeout(() => setToast((tt) => (tt?.key === key ? null : tt)), 1700);
+  };
+  // ── THE WALK — held movement keys (WASD / arrows), read by the compositor's rAF
+  // loop, which drives the SAME free-blit streaming camera the drag-pan uses. The
+  // avatar is pinned at screen centre; "walking" is the camera carrying them.
+  const keysRef = useRef({ x: 0, y: 0 });
+  useEffect(() => {
+    const held = new Set<string>();
+    const sync = () => {
+      keysRef.current = {
+        x: (held.has('d') || held.has('arrowright') ? 1 : 0) - (held.has('a') || held.has('arrowleft') ? 1 : 0),
+        y: (held.has('s') || held.has('arrowdown') ? 1 : 0) - (held.has('w') || held.has('arrowup') ? 1 : 0),
+      };
+    };
+    const down = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement | null)?.tagName === 'INPUT') return;
+      const k = e.key.toLowerCase();
+      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) {
+        if (k.startsWith('arrow')) e.preventDefault();   // keep the page still
+        held.add(k); sync();
+      }
+    };
+    const up = (e: KeyboardEvent) => { held.delete(e.key.toLowerCase()); sync(); };
+    const blur = () => { held.clear(); sync(); };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', blur);
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur); };
+  }, []);
   const [discovery, setDiscovery] = useState<null | {
     kind: 'species' | 'breed'; taxon: string; common: string;
     speciesTier: string; breedTier: string; speciesRank: number; speciesTotal: number;
@@ -682,6 +725,14 @@ export default function Terra() {
       }
       if (best) {
         const c = faunaRef.current.find((f) => f.id === best!.id)!;
+        // ── PROXIMITY — you catch with your HANDS, not your cursor. The avatar
+        // stands at the view centre; a creature beyond arm's-reach-ish range can't
+        // be attempted at all — walk to it (WASD). This is what makes shyness and
+        // flee behavior REAL: approach is part of the catch.
+        const ax = (GRID - srcW) / 2 + viewPxRef.current.x + srcW / 2;
+        const ay = (GRID - srcH) / 2 + viewPxRef.current.y + srcH / 2;
+        const csc = scopeMap.toS(c.wx1, c.wy1);
+        if (Math.hypot(csc.x - ax, csc.y - ay) > 70) { say('too far — walk closer (WASD)'); return; }
         // ── CATCH ATTEMPT — no longer a guaranteed grab. p(catch) starts high and
         // is cut by how SHY the species is and how RARE its body-plan is (steep, so a
         // legendary genuinely fights you), and further by accumulated WARINESS from
@@ -693,7 +744,8 @@ export default function Terra() {
         const rarityPen = ({ common: 0, uncommon: 0.15, rare: 0.32, 'very rare': 0.5, legendary: 0.65 } as Record<string, number>)[rt] ?? 0;
         const sp = spookRef.current.get(c.id);
         const wariness = sp?.wariness ?? 0;
-        const pCatch = Math.max(0.08, 0.95 - shy * 0.35 - rarityPen - wariness * 0.2);
+        // the capture rig (equipment) adds a flat bonus — never certainty (≤0.98)
+        const pCatch = Math.min(0.98, Math.max(0.08, 0.95 - shy * 0.35 - rarityPen - wariness * 0.2 + rigBonusOf(shipRef.current)));
         if (Math.random() > pCatch) {
           // MISS — it bolts. A flee impulse directly away from the click point, in
           // world space, plus a bump in wariness (caps out so a species stays catchable).
@@ -737,6 +789,14 @@ export default function Terra() {
             speciesRank: sr.realized, speciesTotal: sr.total,
           });
         }
+        // ── PAY THE NATURALIST — ⬡ data, priced by rarity (the taxonomy layer is
+        // the price list); first discoveries pay a premium. This is the economy
+        // that buys ship upgrades: documenting life IS the progression.
+        const earned = earnForCatch(rt, firstSpecies, firstBreed);
+        shipRef.current.data += earned;
+        saveShip(shipRef.current);
+        setShipV((v) => v + 1);
+        say(`+${earned} ⬡ data`);
         faunaRef.current = faunaRef.current.filter((f) => f.id !== best!.id);  // gone this frame
         return;
       }
@@ -3224,6 +3284,22 @@ export default function Terra() {
     let raf = 0, frame = 0, last = 0, composed = false;
     const draw = (t: number) => {
       raf = requestAnimationFrame(draw);
+      // ── WALKING (every rAF frame, before the compose gate): held keys slide the
+      // view offset and re-blit — the exact path a drag-pan takes, so it costs a
+      // free blit per frame (60fps stroll) and the same edge check streams the
+      // world in ahead of you (commit → re-centre bake → reveal-ahead).
+      const kv = keysRef.current;
+      if ((kv.x || kv.y) && !dragRef.current) {
+        const sp = kv.x && kv.y ? 1.15 : 1.6;             // diagonal ≈ same ground speed
+        viewPxRef.current = { x: viewPxRef.current.x + kv.x * sp, y: viewPxRef.current.y + kv.y * sp };
+        blitRef.current?.();
+        const srcW2 = Math.round(fitBox.w), srcH2 = Math.round(fitBox.h);
+        const vx2 = (GRID - srcW2) / 2 + viewPxRef.current.x, vy2 = (GRID - srcH2) / 2 + viewPxRef.current.y;
+        if ((vx2 < EDGE || vy2 < EDGE || vx2 + srcW2 > GRID - EDGE || vy2 + srcH2 > GRID - EDGE) && !pendingCommitRef.current) {
+          pendingCommitRef.current = true;
+          setTimeout(() => { commitPan(); pendingCommitRef.current = false; }, 0);
+        }
+      }
       if (t - last < 140) return;             // keep a smooth-ish rate…
       // MID-DRAG: the pointermove blit already follows the finger; skip the full
       // water/cloud recompose (a whole-grid pass) so the drag gets the frames.
@@ -3642,11 +3718,48 @@ export default function Terra() {
           <button onClick={() => setFloorLv((v) => Math.max(0, v - 1))}>▼</button>
         </div>
       )}
+      {/* ── THE EXPLORER — the main character. Pinned at the view centre (the camera
+          carries them: WASD walks, the streaming bake loads land ahead). Foot-anchored
+          so they STAND on the world point the centre maps to; person-scaled via the
+          same size law the sim's pawns use, so they read as one of the world's
+          bodies, not a UI cursor. Visible from district zoom down (a speck law). */}
+      {(() => {
+        const rsc = scopeMap.unit / REF;
+        if (rsc <= 1.15) return null;
+        const D = Math.max(window.innerWidth, window.innerHeight) / REF;
+        const PH = Math.max(4, Math.min(16, Math.round(1.5 + Math.min(16, rsc) * 0.8))) * D;
+        const PW = PH * 0.62;
+        return (
+          <div style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -100%)', zIndex: 20, pointerEvents: 'none', width: PW, height: PH, imageRendering: 'pixelated' }}>
+            <svg width={PW} height={PH} viewBox="0 0 5 8" shapeRendering="crispEdges" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.55))' }}>
+              <rect x="1" y="0" width="3" height="2" fill="#e8ecf2" />           {/* helmet */}
+              <rect x="1.5" y="0.7" width="2" height="0.9" fill="#63d8e8" />     {/* visor */}
+              <rect x="1" y="2" width="3" height="4" fill="#d97b3f" />           {/* suit */}
+              <rect x="0.4" y="2.4" width="0.7" height="2.2" fill="#c2622c" />   {/* arms */}
+              <rect x="3.9" y="2.4" width="0.7" height="2.2" fill="#c2622c" />
+              <rect x="3.4" y="2.2" width="1.2" height="2.6" fill="#8a94a6" opacity="0.9" /> {/* pack */}
+              <rect x="1.2" y="6" width="1" height="2" fill="#5a4636" />         {/* legs */}
+              <rect x="2.8" y="6" width="1" height="2" fill="#5a4636" />
+            </svg>
+          </div>
+        );
+      })()}
+      {toast && (
+        <div key={toast.key} style={{
+          position: 'fixed', left: '50%', top: 'calc(50% - 64px)', transform: 'translateX(-50%)', zIndex: 42,
+          background: 'rgba(12,14,24,0.9)', border: '1px solid rgba(255,210,74,0.5)', color: '#ffd24a',
+          borderRadius: 8, padding: '5px 12px', font: '12.5px ui-monospace, monospace', pointerEvents: 'none',
+        }}>{toast.msg}</div>
+      )}
       {!hudHidden && (<>
         <button className="atlas-reseed" onClick={reseed} title="generate a different world">⟳ new world</button>
         <button className="atlas-reseed" style={{ right: 130 }} onClick={() => setCodexOpen((v) => !v)}
           title="what you've caught">✦ codex{(() => { const c = [...codexRef.current.values()].filter((e) => e.caught > 0).length; return c ? ` ${c}` : ''; })()}</button>
+        <button className="atlas-reseed" style={{ right: 236 }} onClick={() => setShipOpen((v) => !v)}
+          title="your ship — data + upgrades">⬡ {Math.floor(shipRef.current.data).toLocaleString()}</button>
         {codexOpen && <CodexPanel entries={[...codexRef.current.values()]} v={codexV} onClose={() => setCodexOpen(false)} />}
+        {shipOpen && <ShipPanel ship={shipRef.current} onChange={() => setShipV((v) => v + 1)} onClose={() => setShipOpen(false)}
+          note="thruster + scanner changes apply from orbit (nother)." />}
       </>)}
       {discovery && <DiscoveryBanner d={discovery} onDone={() => setDiscovery(null)} />}
       {/* HUD toggle — always visible so you can get a clean map view and bring it back */}
@@ -3920,13 +4033,16 @@ const bodyGround = (temperate: RGB, type: RGB | null): RGB =>
   type ? mixC(temperate, chr(type), BL) : temperate;
 const GRASS: RGB = bodyGround([78, 96, 58],
   NK === 'ice' ? [168, 178, 170] : NK === 'barren' ? [122, 114, 104]
-  : NK === 'lava' ? [76, 62, 54] : NK === 'crystal' ? [96, 88, 122] : null);
+  : NK === 'lava' ? [76, 62, 54] : NK === 'crystal' ? [96, 88, 122]
+  : NK === 'gas' ? [196, 164, 106] : null);   // storm shelf: dense cloud-top cream
 const FOREST: RGB = bodyGround([46, 68, 44],
   NK === 'ice' ? [140, 158, 148] : NK === 'barren' ? [108, 100, 92]
-  : NK === 'lava' ? [62, 50, 44] : NK === 'crystal' ? [120, 104, 158] : null);
+  : NK === 'lava' ? [62, 50, 44] : NK === 'crystal' ? [120, 104, 158]
+  : NK === 'gas' ? [172, 134, 82] : null);
 const DESERT: RGB = bodyGround([178, 158, 108],
   NK === 'ice' ? [196, 204, 210] : NK === 'barren' ? [140, 130, 118]
-  : NK === 'lava' ? [88, 70, 58] : NK === 'crystal' ? [142, 126, 170] : null);
+  : NK === 'lava' ? [88, 70, 58] : NK === 'crystal' ? [142, 126, 170]
+  : NK === 'gas' ? [222, 196, 140] : null);
 const ROCK: RGB = [104, 100, 94];   // bare rock / mountain (UNBUILDABLE)
 const SNOW: RGB = [222, 226, 232];  // alpine cap (UNBUILDABLE)
 const BEACH: RGB = [203, 185, 140]; // sandy coast
@@ -3957,7 +4073,15 @@ const CLIFF: RGB = [96, 100, 108];  // sea cliff headland
 
 // WATER as discrete DEPTH BANDS (shallow → deep), not a smooth gradient. Flat
 // steps read as purposeful ocean depth; the compositor picks a band per pixel.
-const WATER_BAND: RGB[] = [
+// (a gas giant's "ocean" is the deep windsea — the same depth-band law wearing
+// storm ambers: shallow bright haze at the shelf edge down to the dark deep wind)
+const WATER_BAND: RGB[] = NK === 'gas' ? [
+  [214, 168, 100],
+  [188, 138, 74],
+  [160, 110, 54],
+  [132, 84, 40],
+  [102, 62, 30],
+] : [
   [96, 168, 214],   // shallowest (at the shore)
   [64, 138, 196],
   [42, 110, 176],
@@ -3965,7 +4089,7 @@ const WATER_BAND: RGB[] = [
   [20, 64, 122],    // deepest
 ];
 const WATER_BANDS = WATER_BAND.length;
-const FOAM: RGB = [224, 240, 246];  // breaking wave / crash at the shoreline
+const FOAM: RGB = NK === 'gas' ? [244, 228, 190] : [224, 240, 246];  // breaking wave / crash at the shoreline
 
 // CLOUDS — a drifting sky layer over the whole map (reads the `cloud` data field).
 const CLOUD_MIN = 0.42;    // below this density → clear sky (no cloud drawn)
