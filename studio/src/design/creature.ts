@@ -225,6 +225,49 @@ export const PATTERNS: { name: string; draw: (c: Ctx) => void }[] = [
       for (let x = -c.bw / 2 + 2; x < c.bw / 2 - 1; x += 4) c.px(c.cx + x, c.by + 1, 2, c.bh - 2, c.accent);
     },
   },
+  // ── appended (indices 3+) to floor the registry at 10. Never reorder 0–2.
+  {
+    name: 'mottled',                                          // dense fine speckle
+    draw: (c) => {
+      for (let i = 0; i < 8 + c.size * 8; i++) c.px(c.cx - c.bw / 2 + c.rnd() * c.bw, c.by + c.rnd() * c.bh, 1, 1, c.accent);
+    },
+  },
+  {
+    name: 'banded',                                           // horizontal bands across the back
+    draw: (c) => {
+      for (let y = 1; y < c.bh - 1; y += 3) c.px(c.cx - c.bw / 2 + 1, c.by + y, c.bw - 2, 1, c.accent);
+    },
+  },
+  {
+    name: 'dorsal',                                           // a single stripe down the spine
+    draw: (c) => c.px(c.cx - 1, c.by + 1, 2, c.bh - 2, c.accent),
+  },
+  {
+    name: 'patched',                                          // a few large blotches
+    draw: (c) => {
+      for (let i = 0; i < 3; i++) c.px(c.cx - c.bw / 2 + c.rnd() * (c.bw - 4), c.by + c.rnd() * (c.bh - 3), 4, 3, c.accent);
+    },
+  },
+  {
+    name: 'eyed',                                             // eyespots (ringed dots)
+    draw: (c) => {
+      for (let i = 0; i < 2 + c.size * 2; i++) {
+        const ex = c.cx - c.bw / 2 + 2 + c.rnd() * (c.bw - 4), ey = c.by + 1 + c.rnd() * (c.bh - 3);
+        c.px(ex - 1, ey - 1, 3, 3, c.accent);
+        c.px(ex, ey, 1, 1, c.dark);
+      }
+    },
+  },
+  {
+    name: 'flecked',                                          // sparse bright flecks
+    draw: (c) => {
+      for (let i = 0; i < 3 + c.size * 3; i++) c.px(c.cx - c.bw / 2 + c.rnd() * c.bw, c.by + c.rnd() * c.bh, 1, 2, c.accent);
+    },
+  },
+  {
+    name: 'countershaded',                                    // a pale belly half
+    draw: (c) => c.px(c.cx - c.bw / 2 + 1, c.by + c.bh * 0.55, c.bw - 2, c.bh * 0.4, c.accent),
+  },
 ];
 
 // ---- LEGS — a NEW registry (genome stat `legs`). Each style draws ALL the legs
@@ -276,6 +319,69 @@ export const LEGS: { name: string; draw: (c: LegCtx) => void }[] = [
       }
     },
   },
+  // ── appended (indices 4+) to floor the registry at 10. Never reorder 0–3.
+  {
+    name: 'hoofed',                                            // posts ending in a solid block hoof
+    draw: (c) => {
+      for (let i = 0; i < c.pairs; i++) {
+        const lx = c.cx - c.bw * 0.36 + (i / Math.max(1, c.pairs - 1)) * c.bw * 0.72;
+        c.px(lx, c.topY, 2, c.legLen - 1, c.dark);
+        c.px(lx, c.topY + c.legLen - 1, 2, 1, c.body);         // pale hoof cap
+      }
+    },
+  },
+  {
+    name: 'webbed',                                            // splayed with a membrane between toes
+    draw: (c) => {
+      for (let i = 0; i < c.pairs; i++) {
+        const lx = c.cx - c.bw * 0.36 + (i / Math.max(1, c.pairs - 1)) * c.bw * 0.72;
+        c.px(lx, c.topY, 2, c.legLen, c.dark);
+        c.px(lx - 2, c.topY + c.legLen - 1, 6, 1, c.accent);   // wide web foot
+      }
+    },
+  },
+  {
+    name: 'reverse',                                           // backward-kneed (bird/raptor gait)
+    draw: (c) => {
+      for (let i = 0; i < c.pairs; i++) {
+        const lx = c.cx - c.bw * 0.36 + (i / Math.max(1, c.pairs - 1)) * c.bw * 0.72;
+        const knee = c.topY + c.legLen * 0.5;
+        c.px(lx, c.topY, 2, c.legLen * 0.5, c.dark);
+        c.px(lx + (i % 2 ? 1 : -1), knee, 2, c.legLen * 0.5, c.dark);   // shin kicks the OTHER way
+      }
+    },
+  },
+  {
+    name: 'spindly',                                           // very thin single-pixel legs
+    draw: (c) => {
+      for (let i = 0; i < c.pairs; i++) {
+        const lx = c.cx - c.bw * 0.36 + (i / Math.max(1, c.pairs - 1)) * c.bw * 0.72;
+        c.px(lx, c.topY, 1, c.legLen + 1, c.dark);
+      }
+    },
+  },
+  {
+    name: 'padded',                                            // posts with a rounded soft foot
+    draw: (c) => {
+      for (let i = 0; i < c.pairs; i++) {
+        const lx = c.cx - c.bw * 0.36 + (i / Math.max(1, c.pairs - 1)) * c.bw * 0.72;
+        c.px(lx, c.topY, 2, c.legLen - 1, c.dark);
+        c.px(lx - 1, c.topY + c.legLen - 2, 4, 2, c.dark);    // paw pad
+      }
+    },
+  },
+  {
+    name: 'taloned',                                           // clawed with forward-splayed talons
+    draw: (c) => {
+      for (let i = 0; i < c.pairs; i++) {
+        const lx = c.cx - c.bw * 0.36 + (i / Math.max(1, c.pairs - 1)) * c.bw * 0.72;
+        c.px(lx, c.topY, 2, c.legLen, c.dark);
+        c.px(lx - 1, c.topY + c.legLen, 1, 1, c.dark);        // three toes
+        c.px(lx + 1, c.topY + c.legLen, 1, 1, c.dark);
+        c.px(lx + 2, c.topY + c.legLen - 1, 1, 1, c.dark);
+      }
+    },
+  },
 ];
 
 // ---- TAILS — a NEW registry (genome stat `tail`). Drawn off the REAR of the body
@@ -312,6 +418,43 @@ export const TAILS: { name: string; draw: (c: TailCtx) => void }[] = [
       c.px(c.rx - 5, c.by, 2, c.bh, c.accent);                // vertical fin
     },
   },
+  // ── appended (indices 5+) to floor the registry at 10. Never reorder 0–4.
+  {
+    name: 'curled',                                            // a short tail curling upward
+    draw: (c) => {
+      c.px(c.rx - 3, c.by + c.bh * 0.4, 3, 1, c.body);
+      c.px(c.rx - 4, c.by + c.bh * 0.4 - 2, 1, 2, c.body);
+      c.px(c.rx - 3, c.by + c.bh * 0.4 - 3, 2, 1, c.accent);
+    },
+  },
+  {
+    name: 'plumed',                                            // a long feathery sweep
+    draw: (c) => {
+      for (let i = 0; i < 4; i++) c.px(c.rx - 3 - i * 2, c.by + c.bh * 0.3 + i, 2, 2, c.accent);
+    },
+  },
+  {
+    name: 'spiked',                                            // a stiff tail with a barbed tip
+    draw: (c) => {
+      c.px(c.rx - 4, c.by + c.bh * 0.4, 4, 1, c.body);
+      c.px(c.rx - 6, c.by + c.bh * 0.4 - 1, 2, 3, c.dark);    // the barb
+    },
+  },
+  {
+    name: 'paddle',                                            // a flat horizontal paddle (aquatic)
+    draw: (c) => {
+      c.px(c.rx - 3, c.by + c.bh * 0.45, 3, 1, c.body);
+      c.px(c.rx - 6, c.by + c.bh * 0.3, 3, c.bh * 0.5, c.accent);
+    },
+  },
+  {
+    name: 'ringed',                                            // a banded segmented tail
+    draw: (c) => {
+      c.px(c.rx - 5, c.by + c.bh * 0.4, 5, 2, c.body);
+      c.px(c.rx - 2, c.by + c.bh * 0.4, 1, 2, c.dark);        // bands
+      c.px(c.rx - 4, c.by + c.bh * 0.4, 1, 2, c.dark);
+    },
+  },
 ];
 
 function lump(c: Ctx, w: number, h: number, y: number) {
@@ -331,6 +474,51 @@ export function partsOf(s: Stats) {
     legs: idx(LEGS, s.legs).name,
     tail: idx(TAILS, s.tail).name,
   };
+}
+
+// ═══ TAXONOMY — the discovery/naming layer, PURE DETERMINISM (no server for the
+// math; the shared ledger just custodies WHO named what). Two tiers:
+//   SPECIES = the structural body-plan  (torso × head × legs × tail)
+//           = a FINITE, exhaustible catalog: SPECIES_TOTAL nameable universe-wide.
+//   BREED   = a species + its finish  (pattern × flyer × coarse hue-band × size-band)
+//           = the endless collecting layer, BREEDS_PER_SPECIES morphs each.
+// A creature's species/breed KEY is a canonical integer in [0, TOTAL) computed from
+// its RESOLVED part indices (mod registry length, so a genome always lands in-range
+// regardless of how wide the world's floor() rolls). Same genome → same keys, for
+// everyone, forever — that's what makes "first to catch this" a real, sharable fact.
+const HUE_BANDS = 3;    // coarse colour buckets that distinguish a breed
+const SIZE_BANDS = 2;   // coarse size buckets (small / large)
+export const SPECIES_TOTAL = TORSOS.length * HEADS.length * LEGS.length * TAILS.length;
+export const BREEDS_PER_SPECIES = PATTERNS.length * 2 /*flyer*/ * HUE_BANDS * SIZE_BANDS;
+export const BREEDS_TOTAL = SPECIES_TOTAL * BREEDS_PER_SPECIES;
+
+const ri = (arr: unknown[], v: number | undefined) => Math.max(0, Math.round(v ?? 0)) % arr.length;
+const hueBand = (h: number) => Math.min(HUE_BANDS - 1, Math.floor((((h ?? 0) % 1) + 1) % 1 * HUE_BANDS));
+const sizeBand = (sz: number) => ((sz ?? 0.5) > 0.5 ? 1 : 0);
+
+/** canonical species id in [0, SPECIES_TOTAL) — the structural body-plan. */
+export function speciesKey(s: Stats): number {
+  const t = ri(TORSOS, s.torso), h = ri(HEADS, s.head), l = ri(LEGS, s.legs), ta = ri(TAILS, s.tail);
+  return ((t * HEADS.length + h) * LEGS.length + l) * TAILS.length + ta;
+}
+/** canonical breed id in [0, BREEDS_TOTAL) — species + its finish. */
+export function breedKey(s: Stats): number {
+  const p = ri(PATTERNS, s.pattern), f = (s.flyer ?? 0) > 0.5 ? 1 : 0;
+  const finish = ((p * 2 + f) * HUE_BANDS + hueBand(s.hue ?? 0)) * SIZE_BANDS + sizeBand(s.size ?? 0.5);
+  return speciesKey(s) * BREEDS_PER_SPECIES + finish;
+}
+
+// the SCIENTIFIC name of a SPECIES — one canonical name per speciesKey, so every
+// visitor calls the same body-plan the same thing (the naming target). Syllable
+// hash off the key alone (NOT gene), so all breeds of a species share the name.
+const TX_A = ['mor', 'vel', 'tan', 'kir', 'sol', 'bram', 'fen', 'lux', 'dro', 'nim', 'quor', 'syl'];
+const TX_B = ['ath', 'ille', 'ock', 'ern', 'yph', 'and', 'ilk', 'oss', 'ume', 'ari', 'ux', 'een'];
+export function taxonName(speciesKeyId: number): string {
+  const h = Math.abs(Math.floor(speciesKeyId * 2654435761)) >>> 0;
+  const a = TX_A[h % TX_A.length], b = TX_B[Math.floor(h / 12) % TX_B.length];
+  const c = TX_A[Math.floor(h / 144) % TX_A.length];
+  const n = a + b + (h % 3 === 0 ? c : '');
+  return n[0].toUpperCase() + n.slice(1);
 }
 
 // ── COMMON NAME — the folk name, DERIVED from the genome (the scientific name is a
@@ -366,6 +554,78 @@ export function commonName(s: Stats): string {
 
   return `${hueWord(s.hue ?? 0)} ${adj.slice(0, 2).join(' ')} ${noun}`
     .replace(/\s+/g, ' ').trim();
+}
+
+// ═══ RARITY — how common a species/breed is ACROSS THE WHOLE UNIVERSE, computed by
+// SAMPLING the deterministic genome function (no stored data — the universe IS the
+// database). The bestiary generator rolls each species as a golden-ratio hash of
+// (species_int ∈ 0..~12, gene ∈ [0,1)) bent by planet laws; we replay that exact
+// formula over a wide sweep of (species_int, gene, air, gravity) and histogram the
+// resulting speciesKey/breedKey. The frequency of a key = how much of the universe
+// wears that body-plan. Deterministic + verifiable: anyone running this sweep gets
+// the same rarities. Computed once, lazily, then cached.
+const md = (x: number) => ((x % 1) + 1) % 1;
+const clampR = (x: number, lo: number, hi: number) => (x < lo ? lo : x > hi ? hi : x);
+// replay the bestiary species genome (the canonical roll) for a sampled address
+function sampleGenome(sp: number, gene: number, air: number, grav: number): Stats {
+  const flyer = md(sp * 0.618 + gene) < clampR(1.35 - 1.55 * air, 0, 0.9) ? 1 : 0;
+  return {
+    flyer,
+    size: clampR(0.2 + 0.8 * md(sp * 0.317 + gene * 2.3) - 0.38 * grav, 0.12, 1),
+    torso: Math.floor(11.99 * md(sp * 0.777 + gene * 1.7)),
+    head: Math.floor(15.99 * md(sp * 0.531 + gene * 0.9)),
+    legs: flyer ? 0 : Math.floor(9.99 * md(sp * 0.923 + gene * 2.7)),
+    tail: Math.floor(9.99 * md(sp * 0.389 + gene * 3.3)),
+    pattern: Math.floor(9.99 * md(sp * 0.687 + gene * 2.9)),
+    hue: md(sp * 0.161 + gene * 4.7),
+  };
+}
+let _speciesFreq: Map<number, number> | null = null;
+let _breedFreq: Map<number, number> | null = null;
+let _spSorted: number[] = [];    // realized species counts, ascending (for percentile)
+let _brSorted: number[] = [];
+function buildFreq() {
+  const sf = new Map<number, number>(), bf = new Map<number, number>();
+  // sweep the generator's input space densely: species_int 0..12, gene ×80, and a
+  // grid of the laws that bend the plan (air/gravity ×8 each) → ~66k rolls, enough
+  // to resolve the frequency histogram without noise. Deterministic → same every run.
+  for (let sp = 0; sp < 13; sp++)
+    for (let g = 0; g < 80; g++)
+      for (let ai = 0; ai < 8; ai++)
+        for (let gr = 0; gr < 8; gr++) {
+          const st = sampleGenome(sp, (g + 0.5) / 80, (ai + 0.5) / 8, (gr + 0.5) / 8);
+          const sk = speciesKey(st), bk = breedKey(st);
+          sf.set(sk, (sf.get(sk) ?? 0) + 1);
+          bf.set(bk, (bf.get(bk) ?? 0) + 1);
+        }
+  _speciesFreq = sf; _breedFreq = bf;
+  _spSorted = [...sf.values()].sort((a, b) => a - b);
+  _brSorted = [...bf.values()].sort((a, b) => a - b);
+}
+export interface Rarity { tier: string; percentile: number; realized: number; total: number }
+// RELATIVE rarity: a body-plan's rank against every OTHER realized body-plan. This
+// is the honest measure — with ~19k possible species and a non-uniform hash, "rare"
+// means "few addresses wear this plan vs other plans", not an absolute fraction.
+const pctileOf = (sorted: number[], count: number): number => {
+  if (count <= 0 || sorted.length === 0) return 0;            // never realized → maximally rare
+  let lo = 0, hi = sorted.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (sorted[m] <= count) lo = m + 1; else hi = m; }
+  return lo / sorted.length;
+};
+const tierOf = (p: number): string =>
+  p < 0.05 ? 'legendary' : p < 0.15 ? 'very rare' : p < 0.35 ? 'rare' : p < 0.65 ? 'uncommon' : 'common';
+
+/** how rare this creature's SPECIES (body-plan) is, universe-wide. */
+export function speciesRarity(s: Stats): Rarity {
+  if (!_speciesFreq) buildFreq();
+  const p = pctileOf(_spSorted, _speciesFreq!.get(speciesKey(s)) ?? 0);
+  return { tier: tierOf(p), percentile: p, realized: _speciesFreq!.size, total: SPECIES_TOTAL };
+}
+/** how rare this creature's BREED (species + finish) is, universe-wide. */
+export function breedRarity(s: Stats): Rarity {
+  if (!_breedFreq) buildFreq();
+  const p = pctileOf(_brSorted, _breedFreq!.get(breedKey(s)) ?? 0);
+  return { tier: tierOf(p), percentile: p, realized: _breedFreq!.size, total: BREEDS_TOTAL };
 }
 
 /** FULL PORTRAIT — all parts, onto a 40×40 logical grid. */

@@ -33,7 +33,7 @@ import { makeScopeMap, localToScreenWith, regionCells, cellsCenter, type ScopeMa
 // its own). The old city/ demo is untouched; this is the portable "same engine,
 // our data" path.
 import worldSpec from './world.json';
-import { drawSilhouette, commonName } from '../design/creature';   // ONE compositor — the same fn /bestiary.html draws with
+import { drawSilhouette, commonName, speciesKey, breedKey, taxonName, speciesRarity, breedRarity } from '../design/creature';   // ONE compositor — the same fn /bestiary.html draws with
 import './terra.css';
 // ⤓ EXPLORE ARRIVAL — how a notherspace body lands here as a REAL world. The
 // address chain seeds it; templeFor applies the visitor's universe charter
@@ -201,6 +201,14 @@ export default function Terra() {
   }>>(new Map());
   const [codexV, setCodexV] = useState(0);
   const [codexOpen, setCodexOpen] = useState(false);
+  // ── DISCOVERY CANON (local-first; the hosted ledger is a swap for this Set). Every
+  // speciesKey/breedKey ever CAUGHT is remembered across sessions in localStorage, so
+  // "first to catch this body-plan" is a permanent, personal fact. Prefixed s:/b:.
+  const discoveredRef = useRef<Set<string>>(new Set(loadDiscovered()));
+  const [discovery, setDiscovery] = useState<null | {
+    kind: 'species' | 'breed'; taxon: string; common: string;
+    speciesTier: string; breedTier: string; speciesRank: number; speciesTotal: number;
+  }>(null);
   const peoplePrevRef = useRef<Map<number, { wx: number; wy: number }>>(new Map());
   const peopleT0Ref = useRef<number>(0);   // performance.now() of the last heartbeat
   const gradeElRef = useRef<HTMLDivElement>(null);   // the day/night tint layer (set directly, no re-render)
@@ -670,6 +678,30 @@ export default function Terra() {
         const key = `${c.species}:${c.gene.toFixed(3)}`;
         const entry = codexRef.current.get(key);
         if (entry) { entry.caught++; setCodexV((v) => v + 1); setCodexOpen(true); }
+
+        // ── DISCOVERY — is this a body-plan (SPECIES) or a finish (BREED) nobody's
+        // caught before? Keys are deterministic, so "first" is a real, sharable fact.
+        const sk = `s:${speciesKey(c.stats)}`, bk = `b:${breedKey(c.stats)}`;
+        const disc = discoveredRef.current;
+        const firstSpecies = !disc.has(sk), firstBreed = !disc.has(bk);
+        if (firstSpecies || firstBreed) {
+          // LOCAL CANON = this persisted Set (the local-first half). The HOSTED
+          // ledger swap is: on first-species, also POST speciesKey+player+tick to the
+          // server, which owns the authoritative "first discovered by X" fact. Engine
+          // add_fact isn't bridged to WASM yet — that bridge is the server hook, not
+          // needed for single-player naming, which this Set fully provides.
+          if (firstSpecies) disc.add(sk);
+          disc.add(bk);
+          saveDiscovered(disc);
+          const sr = speciesRarity(c.stats), br = breedRarity(c.stats);
+          setDiscovery({
+            kind: firstSpecies ? 'species' : 'breed',
+            taxon: taxonName(speciesKey(c.stats)),
+            common: commonName(c.stats),
+            speciesTier: sr.tier, breedTier: br.tier,
+            speciesRank: sr.realized, speciesTotal: sr.total,
+          });
+        }
         faunaRef.current = faunaRef.current.filter((f) => f.id !== best!.id);  // gone this frame
         return;
       }
@@ -3529,6 +3561,7 @@ export default function Terra() {
           title="what you've documented">✦ codex{codexRef.current.size ? ` ${codexRef.current.size}` : ''}</button>
         {codexOpen && <CodexPanel entries={[...codexRef.current.values()]} v={codexV} onClose={() => setCodexOpen(false)} />}
       </>)}
+      {discovery && <DiscoveryBanner d={discovery} onDone={() => setDiscovery(null)} />}
       {/* HUD toggle — always visible so you can get a clean map view and bring it back */}
       <button className="atlas-hudtoggle" onClick={() => setHudHidden((v) => !v)}
         title={hudHidden ? 'show interface' : 'hide interface'}>
@@ -3564,20 +3597,57 @@ function legendItems(): [RGB, string, boolean][] {
 // species vanished while you were watching its home region. Names are
 // deterministic from species+gene — the same creature has the same name for
 // every visitor, forever.
-const SYL_A = ['mor', 'vel', 'tan', 'kir', 'sol', 'bram', 'fen', 'lux', 'dro', 'nim'];
-const SYL_B = ['ath', 'ille', 'ock', 'ern', 'yph', 'and', 'ilk', 'oss', 'ume', 'ari'];
-function speciesName(species: number, gene: number): string {
-  const h = Math.abs(Math.floor(species * 7919 + gene * 104729));
-  const a = SYL_A[h % SYL_A.length], b = SYL_B[Math.floor(h / 10) % SYL_B.length];
-  const c = SYL_A[Math.floor(h / 100) % SYL_A.length];
-  const n = a + b + (h % 3 === 0 ? c : '');
-  return n[0].toUpperCase() + n.slice(1);
+// DISCOVERY persistence — the local canon of what you've caught (speciesKeys +
+// breedKeys). The hosted-ledger version swaps localStorage for a server round-trip;
+// the game logic doesn't change, only WHERE the "first discovered by" fact lives.
+const DISCOVERED_KEY = 'nother_discovered';
+function loadDiscovered(): string[] {
+  try { return JSON.parse(localStorage.getItem(DISCOVERED_KEY) ?? '[]') as string[]; } catch { return []; }
 }
+function saveDiscovered(set: Set<string>): void {
+  try { localStorage.setItem(DISCOVERED_KEY, JSON.stringify([...set])); } catch { /* ignore */ }
+}
+// (per-individual speciesName removed — the codex now shows the canonical
+// taxonName(speciesKey), so every breed of a species shares one scientific name.)
 const ACT_NOTES: Record<string, string> = {
   wander: 'roams its range',
   graze: 'grazes the open ground',
   hunt: 'stalks smaller creatures',
 };
+// tier → colour (shared by the banner + codex chips). Legendary/very-rare glow.
+const TIER_COLOR: Record<string, string> = {
+  legendary: '#ffd24a', 'very rare': '#c98bff', rare: '#5ec8ff', uncommon: '#7be0a0', common: '#9aa3b8',
+};
+// the DISCOVERY BANNER — the "oh snap" moment. A first-species catch reads NEW
+// SPECIES (the rare, finite, sharable event); a first-breed reads new breed. Rarity
+// tier colours it. Auto-dismisses. (Rarity → body FX / sparkle is a later layer.)
+function DiscoveryBanner({ d, onDone }: {
+  d: { kind: 'species' | 'breed'; taxon: string; common: string; speciesTier: string; breedTier: string; speciesRank: number; speciesTotal: number };
+  onDone: () => void;
+}) {
+  useEffect(() => { const t = setTimeout(onDone, 5200); return () => clearTimeout(t); }, [d, onDone]);
+  const isSpecies = d.kind === 'species';
+  const tier = isSpecies ? d.speciesTier : d.breedTier;
+  const col = TIER_COLOR[tier] ?? '#9aa3b8';
+  return (
+    <div onClick={onDone} style={{
+      position: 'fixed', left: '50%', top: 74, transform: 'translateX(-50%)', zIndex: 40,
+      background: 'rgba(14,16,24,0.94)', border: `1px solid ${col}`, borderRadius: 10,
+      padding: '12px 20px', textAlign: 'center', minWidth: 240, cursor: 'pointer',
+      boxShadow: `0 0 24px ${col}44, 0 6px 20px rgba(0,0,0,0.5)`,
+    }}>
+      <div style={{ color: col, fontSize: 12, letterSpacing: 1.5, fontWeight: 700 }}>
+        {isSpecies ? '★ NEW SPECIES' : '◆ NEW BREED'}
+      </div>
+      <div style={{ textTransform: 'capitalize', fontSize: 17, margin: '3px 0 1px' }}>{d.common}</div>
+      <em style={{ opacity: 0.65, fontSize: 12 }}>{d.taxon}</em>
+      <div style={{ marginTop: 6, fontSize: 11, color: col, textTransform: 'uppercase', letterSpacing: 1 }}>
+        {tier}{isSpecies ? ` species · ${d.speciesRank.toLocaleString()} of ${d.speciesTotal.toLocaleString()} known` : ' breed'}
+      </div>
+      {isSpecies && <div style={{ marginTop: 4, fontSize: 10, opacity: 0.5 }}>first catalogued by you</div>}
+    </div>
+  );
+}
 function CodexPanel({ entries, v, onClose }: {
   entries: { species: number; gene: number; size: number; hue: number; diet: number; nocturnal: number; stats: Record<string, number>; seen: number; caught: number; acts: Set<string>; extinct: boolean }[];
   v: number; onClose: () => void;
@@ -3610,8 +3680,11 @@ function CodexPanel({ entries, v, onClose }: {
               }} />
               <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
                 <strong style={{ textTransform: 'capitalize' }}>{commonName(e.stats)}</strong>
-                <em style={{ opacity: 0.6, fontSize: 11 }}>{speciesName(e.species, e.gene)}</em>
+                <em style={{ opacity: 0.6, fontSize: 11 }}>{taxonName(speciesKey(e.stats))}</em>
               </div>
+              {(() => { const t = speciesRarity(e.stats).tier; return (
+                <span style={{ marginLeft: 'auto', fontSize: 10, color: TIER_COLOR[t], textTransform: 'uppercase', letterSpacing: 0.5 }}>{t}</span>
+              ); })()}
               {e.extinct && <span style={{ color: '#ff9a9a', fontSize: 11 }}>extinct</span>}
               {!documented && <span style={{ opacity: 0.5, fontSize: 11 }}>undocumented</span>}
             </div>

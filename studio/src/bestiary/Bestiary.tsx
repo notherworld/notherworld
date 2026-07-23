@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createWorld, type EntityDto } from '../owos';
 import baseSpec from '../../../worlds/bestiary.json';
-import { drawCreature, partsOf, commonName } from '../design/creature';
+import { drawCreature, partsOf, commonName, taxonName, speciesKey, speciesRarity } from '../design/creature';
 import './bestiary.css';
 
 const SYL_A = ['mor', 'vel', 'tan', 'kir', 'sol', 'bram', 'fen', 'lux', 'dro', 'nim', 'qua', 'zeph'];
@@ -104,7 +104,7 @@ export default function Bestiary() {
       )}
 
       <section className="bst-grid">
-        {species.map(({ e, name }) => {
+        {species.map(({ e }) => {
           const st = e.stats;
           const tags = [
             (st.flyer ?? 0) > 0.5 ? 'flyer' : 'strider',
@@ -117,12 +117,15 @@ export default function Bestiary() {
               <canvas width={40} height={40}
                 ref={(cv) => { if (cv) { canvases.current.set(e.id, cv); drawCreature(cv, st); } }} />
               <strong style={{ textTransform: 'capitalize' }}>{commonName(st)}</strong>
-              <em style={{ opacity: 0.55, fontSize: 11 }}>{name}</em>
+              <em style={{ opacity: 0.55, fontSize: 11 }}>{taxonName(speciesKey(st))}</em>
               <div className="bst-parts">{(() => {
                 const p = partsOf(st);
                 return `${p.torso} · ${p.head}${p.legs !== 'plain' ? ` · ${p.legs} legs` : ''}${p.tail !== 'none' ? ` · ${p.tail} tail` : ''}${p.pattern !== 'plain' ? ` · ${p.pattern}` : ''}`;
               })()}</div>
-              <div className="bst-tags">{tags.map((t) => <span key={t} className={`bst-tag bst-tag-${t}`}>{t}</span>)}</div>
+              <div className="bst-tags">
+                <span className={`bst-tag bst-tag-rarity`} style={{ opacity: 0.9 }}>{speciesRarity(st).tier}</span>
+                {tags.map((t) => <span key={t} className={`bst-tag bst-tag-${t}`}>{t}</span>)}
+              </div>
             </div>
           );
         })}

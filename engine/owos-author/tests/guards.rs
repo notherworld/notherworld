@@ -231,9 +231,9 @@ fn terra_fauna_ecosystem_lives() {
     for &f in &all {
         assert!(w.stat(f, "torso") >= 0.0 && w.stat(f, "torso") < 12.0, "torso index in TORSOS range");
         assert!(w.stat(f, "head") >= 0.0 && w.stat(f, "head") < 16.0, "head index in HEADS range");
-        assert!(w.stat(f, "legs") >= 0.0 && w.stat(f, "legs") < 4.0, "legs index in LEGS range");
-        assert!(w.stat(f, "tail") >= 0.0 && w.stat(f, "tail") < 5.0, "tail index in TAILS range");
-        assert!(w.stat(f, "pattern") >= 0.0 && w.stat(f, "pattern") < 3.0, "pattern index in PATTERNS range");
+        assert!(w.stat(f, "legs") >= 0.0 && w.stat(f, "legs") < 10.0, "legs index in LEGS range");
+        assert!(w.stat(f, "tail") >= 0.0 && w.stat(f, "tail") < 10.0, "tail index in TAILS range");
+        assert!(w.stat(f, "pattern") >= 0.0 && w.stat(f, "pattern") < 10.0, "pattern index in PATTERNS range");
         assert!(w.stat(f, "height") > 0.0 && w.stat(f, "leglen") > 0.0, "stature genome present");
         assert!(w.stat(f, "hue2") > 0.0, "secondary hue present for the portrait accent");
     }

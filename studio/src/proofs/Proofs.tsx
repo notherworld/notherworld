@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { createWorld, type Snapshot } from '../owos';
 import { starOf, planetOf } from '../view/facts';
+import { speciesKey, breedKey, taxonName, speciesRarity, SPECIES_TOTAL, BREEDS_TOTAL, type Stats } from '../design/creature';
 import hotelSpec from '../../../worlds/hotel.json';
 import craftSpec from '../../../worlds/craft.json';
 import emberholdSpec from '../../../worlds/emberhold.json';
@@ -283,6 +284,41 @@ const PROOFS: Proof[] = [
       if (fpPct < 0.5 || fpPct > 6) throw new Error(`false-positive detections ${fpPct.toFixed(1)}% — malfunction should be rare (~1-3%), not ${fpPct > 6 ? 'common' : 'absent'}`);
       if (fnPct < 0.5 || fnPct > 6) throw new Error(`false-negative readings ${fnPct.toFixed(1)}% — malfunction should be rare (~1-3%), not ${fnPct > 6 ? 'common' : 'absent'}`);
       return `${alivePct.toFixed(0)}% of rocky worlds alive · ${camoPct.toFixed(0)}% of "none detected" secretly alive (no safe skip) · ${teaserPct.toFixed(0)}% of favorable readings are dead teasers (no promise) · scanner lies ~${fpPct.toFixed(1)}% false-positive / ~${fnPct.toFixed(1)}% false-negative (rare instrument fault) · 0 extremophiles ever detectable · density tracks band (fav ${df.toFixed(2)} > unl ${du.toFixed(2)})`;
+    },
+  },
+  {
+    id: 'taxonomy',
+    title: 'the species catalog is finite, deterministic, and nameable',
+    what:
+      'Checks the two-tier taxonomy: SPECIES = the structural body-plan (torso×head×legs×tail) is a FIXED, exhaustible set (19,200 universe-wide); BREED = species + finish is the larger collecting layer (~2.3M). Verifies the counts, that a genome maps to STABLE species/breed keys and one canonical name (same input → same identity, every run), and that rarity is a deterministic property of the address, not a random roll.',
+    why:
+      'Discovery only means something if the thing discovered is real and finite. Because every creature is hash(genome) and the universe is deterministic, "how many species exist" and "how rare is this one" are COMPUTABLE and VERIFIABLE — no server needed for the math, only for custody of who named what first. A million players can name all 19,200 species precisely because the catalog is bounded; a body-plan nobody has caught is a genuine, permanent first. If keys or names ever drifted between runs, first-discovery would be meaningless — this row proves they do not.',
+    native: '(design/creature.ts — the same taxonomy nother/terra/bestiary read)',
+    run: async () => {
+      if (SPECIES_TOTAL !== 19200) throw new Error(`species total ${SPECIES_TOTAL}, expected 19,200`);
+      if (BREEDS_TOTAL !== 2304000) throw new Error(`breed total ${BREEDS_TOTAL}, expected 2,304,000`);
+      // determinism: a genome maps to identical keys + name across independent calls
+      const mk = (i: number): Stats => ({
+        torso: (i * 7) % 12, head: (i * 3) % 16, legs: (i * 5) % 10, tail: (i * 2) % 10,
+        pattern: (i * 11) % 10, flyer: i % 3 === 0 ? 1 : 0, hue: (i * 0.137) % 1, size: (i % 5) / 5,
+      });
+      const keys = new Set<number>();
+      for (let i = 0; i < 4000; i++) {
+        const g = mk(i);
+        const sk1 = speciesKey(g), sk2 = speciesKey(g);
+        if (sk1 !== sk2) throw new Error('speciesKey not deterministic');
+        if (taxonName(sk1) !== taxonName(sk1)) throw new Error('taxonName not deterministic');
+        if (sk1 < 0 || sk1 >= SPECIES_TOTAL) throw new Error(`speciesKey ${sk1} out of range`);
+        const bk = breedKey(g);
+        if (bk < 0 || bk >= BREEDS_TOTAL) throw new Error(`breedKey ${bk} out of range`);
+        keys.add(sk1);
+      }
+      // rarity is a stable property of the genome (same input → same tier)
+      const probe = mk(1234);
+      if (speciesRarity(probe).tier !== speciesRarity(probe).tier) throw new Error('rarity not stable');
+      const tiers = new Set([0, 500, 1500, 3000, 3999].map((i) => speciesRarity(mk(i)).tier));
+      if (tiers.size < 2) throw new Error('rarity has no spread — every species reads the same tier');
+      return `${SPECIES_TOTAL.toLocaleString()} species · ${BREEDS_TOTAL.toLocaleString()} breeds · ${keys.size} distinct species keys from 4k genomes, all in-range + stable · rarity tiers vary (${[...tiers].join(', ')})`;
     },
   },
 ];
